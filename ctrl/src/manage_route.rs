@@ -6,9 +6,9 @@ use crate::types::{ContextData, Result};
 
 const ISSUER_ANNOTATION: &'static str = "cert-manager.io/issuer";
 
-async fn is_valid_route(route: &Route) -> bool {
+pub async fn is_valid_route(route: &Route) -> bool {
     if route.spec.host == None
-        || route.metadata.annotations == None 
+        || route.metadata.annotations == None
         || route.metadata.annotations.as_ref().unwrap().get(ISSUER_ANNOTATION) == None {
         false
     } else {
@@ -16,7 +16,7 @@ async fn is_valid_route(route: &Route) -> bool {
     }
 }
 
-async fn create_certificate (route: &Route, ctx: &ContextData) -> Result<(), kube::Error> {
+pub async fn create_certificate(route: &Route, ctx: &ContextData) -> Result<String, kube::Error> {
     let annotations = route.metadata.annotations.as_ref().unwrap();
     let hostname = route.spec.host.as_ref().unwrap();
     let cert_name = format!("{}-cert", &hostname);
@@ -42,7 +42,7 @@ async fn create_certificate (route: &Route, ctx: &ContextData) -> Result<(), kub
                 encoding: None,
                 rotation_policy: None,
                 size: Some(256)
-            }), 
+            }),
             additional_output_formats: None,
             common_name: None,
             duration: None,
@@ -59,7 +59,7 @@ async fn create_certificate (route: &Route, ctx: &ContextData) -> Result<(), kub
             usages: None,
         },
     };
-    cert_api.create(&PostParams::default(), &cert).await?;
+    let _ = cert_api.create(&PostParams::default(), &cert).await?;
     println!("Created Certificate `{}` in namespace {}", &cert_name, &ctx.cert_manager_namespace);
-    Ok(())
+    Ok(cert_name)
 }
