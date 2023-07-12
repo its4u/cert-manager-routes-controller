@@ -13,9 +13,13 @@ use kube::{
 };
 use crd::{route::Route, certificate::Certificate};
 use route::is_valid_route;
-use certificate::{annotate_cert, create_certificate};
+use certificate::{annotate_cert, create_certificate, certificate_exists};
 use types::*;
+use tools::format_cert_name;
 
+const REQUEUE_DEFAULT_INTERVAL: u64 = 3600;
+const REQUEUE_ERROR_DURATION_SLOW: u64 = 120;
+const REQUEUE_ERROR_DURATION_FAST: u64 = 5;
 pub const DEFAULT_CERT_MANAGER_NAMESPACE: &'static str = "cert-manager";
 pub const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
 pub const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
@@ -51,10 +55,38 @@ async fn main() -> Result<(), kube::Error> {
     Ok(())
 }
 
-async fn reconcile(obj: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
-    Ok(Action::requeue(Duration::from_secs(3600)))
+async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
+    if is_valid_route(&route).await {
+        let route_name = route.name_any();
+        let route_namespace = route.namespace().unwrap();
+        let hostname = route.spec.host.as_ref().unwrap();
+        let cert_name = format_cert_name(&hostname);
+
+        println!("reconcile request from Route `{}:{}",  &route_namespace, &route_name);
+
+        if !certificate_exists(&cert_name, &ctx).await {
+            match create_certificate(&route, &ctx).await {
+                Ok(_) => println!("Created Certificate `{}:{}` requested by Route `{}:{}`", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name),
+                Err(e) => {
+                    eprintln!("Error creating Certificate `{}:{}` requested by Route `{}:{}`: {}", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e);
+                    return Ok(Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_SLOW)))
+                }
+            }
+        }
+        
+        // populate route tls 
+
+        match annotate_cert(&cert_name, &route, &ctx).await {
+            Ok(_) => println!("Annotated Certificate `{}:{}` for Route `{}:{}`", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name),
+            Err(e) => {
+                eprintln!("Error annotating Certificate `{}:{}` requested by Route `{}:{}`: {}", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e);
+                return Ok(Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_SLOW)));
+            }
+        }
+    }
+    Ok(Action::requeue(Duration::from_secs(REQUEUE_DEFAULT_INTERVAL)))
 }
 
 fn error_policy(_object: Arc<Route>, _err: &Error, _ctx: Arc<ContextData>) -> Action {
-    Action::requeue(Duration::from_secs(5))
+    Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_FAST))
 }
