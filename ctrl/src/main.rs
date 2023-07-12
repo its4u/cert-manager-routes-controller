@@ -1,22 +1,25 @@
 pub mod crd;
-pub mod manage_route;
 pub mod types;
+pub mod tools;
+pub mod route;
+pub mod certificate;
 
 use std::{sync::Arc, time::Duration};
 use futures::StreamExt;
 use kube::{
     Api, Client, ResourceExt,
-    runtime::controller::{Action, Controller, ReconcileRequest},
+    runtime::controller::{Action, Controller},
     runtime::reflector::ObjectRef,
-    api::ListParams
 };
-use crd::{route::{Route, self}, certificate::Certificate};
-use manage_route::{create_certificate, is_valid_route, annotate_cert};
+use crd::{route::Route, certificate::Certificate};
+use route::is_valid_route;
+use certificate::{annotate_cert, create_certificate};
 use types::*;
 
-const DEFAULT_CERT_MANAGER_NAMESPACE: &'static str = "cert-manager";
-const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
-const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
+pub const DEFAULT_CERT_MANAGER_NAMESPACE: &'static str = "cert-manager";
+pub const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
+pub const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
+pub const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
 
 #[tokio::main]
 async fn main() -> Result<(), kube::Error> {
@@ -25,7 +28,6 @@ async fn main() -> Result<(), kube::Error> {
         ContextData::new(
             Client::try_default().await?, 
             cert_manager_namespace, 
-            CERT_ANNOTATION_KEY.to_owned()
         )
     );
     Controller::new(Api::<Route>::all(context.client.clone()), Default::default())
@@ -50,7 +52,6 @@ async fn main() -> Result<(), kube::Error> {
 }
 
 async fn reconcile(obj: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
-    println!("reconcile request: {}",  obj.name_any());
     Ok(Action::requeue(Duration::from_secs(3600)))
 }
 
