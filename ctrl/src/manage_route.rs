@@ -1,9 +1,9 @@
 use kube::{Api, api::{ObjectMeta, PostParams, PatchParams, Patch}, ResourceExt, core::PartialObjectMetaExt};
-use std::collections::HashSet;
 
 use crate::crd::certificate::{Certificate, CertificateSpec, CertificateIssuerRef, CertificatePrivateKey, CertificatePrivateKeyAlgorithm};
 use crate::crd::route::Route;
 use crate::types::{ContextData, Result};
+use crate::tools::{format_cert_annotation, format_cert_name, format_secret_name};
 
 const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
 
@@ -14,18 +14,6 @@ pub async fn is_valid_route(route: &Route) -> bool {
         false
     } else {
         true
-    }
-}
-
-pub fn format_cert_annotation(cert_annotation: Option<&String>, route_name: &str, route_namespace: &str) -> String {
-    match cert_annotation {
-        Some(cert_annotation) => {
-            let mut annotations: HashSet<String> = HashSet::new();
-            cert_annotation.split(",").for_each(|annotation| { annotations.insert(annotation.to_owned()); });
-            annotations.insert(format!("{}:{}", route_namespace, route_name));
-            annotations.into_iter().collect::<Vec<String>>().join(",")
-        },
-        None => format!("{}:{}", route_namespace, route_name)
     }
 }
 
@@ -49,7 +37,7 @@ pub async fn annotate_cert(cert_name: &String, route: &Route, ctx: &ContextData)
 pub async fn create_certificate(route: &Route, ctx: &ContextData) -> Result<Certificate, kube::Error> {
     let annotations = route.metadata.annotations.as_ref().unwrap();
     let hostname = route.spec.host.as_ref().unwrap();
-    let cert_name = format!("{}-cert", &hostname);
+    let cert_name = format_cert_name(&hostname);
     let cert_api: Api<Certificate> = Api::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace);
     let cert = Certificate {
         status: None,
@@ -59,7 +47,7 @@ pub async fn create_certificate(route: &Route, ctx: &ContextData) -> Result<Cert
             ..Default::default()
         },
         spec: CertificateSpec {
-            secret_name: format!("{}-tls", &hostname),
+            secret_name: format_secret_name(&hostname),
             dns_names: Some(vec![hostname.clone()]),
             issuer_ref: CertificateIssuerRef {
                 name: annotations.get(ISSUER_ANNOTATION_KEY).unwrap().to_owned(),
