@@ -20,7 +20,6 @@ pub async fn annotate_cert(cert_name: &String, route: &Route, ctx: &ContextData)
             annotations: Some(annotations),
             ..Default::default()
         }.into_request_partial::<Certificate>())).await?;
-    println!("Annotated Certificate `{}` in NS `{}`", &cert_name, &ctx.cert_manager_namespace);
     Ok(())
 }
 
@@ -70,4 +69,11 @@ pub async fn create_certificate(route: &Route, ctx: &ContextData) -> Result<Cert
     let cert = cert_api.create(&PostParams::default(), &cert).await?;
     println!("Created Certificate `{}` in namespace {}", &cert_name, &ctx.cert_manager_namespace);
     Ok(cert)
+}
+
+pub async fn certificate_exists(cert_name: &str, ctx: &ContextData) -> bool {
+    match Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace).get(cert_name).await {
+        Ok(_) => true,
+        Err(_) => false,
+    }
 }
