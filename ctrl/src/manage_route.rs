@@ -1,4 +1,5 @@
 use kube::{Api, api::{ObjectMeta, PostParams, PatchParams, Patch}, ResourceExt, core::PartialObjectMetaExt};
+use std::collections::HashSet;
 
 use crate::crd::certificate::{Certificate, CertificateSpec, CertificateIssuerRef, CertificatePrivateKey, CertificatePrivateKeyAlgorithm};
 use crate::crd::route::Route;
@@ -18,7 +19,12 @@ pub async fn is_valid_route(route: &Route) -> bool {
 
 pub fn format_cert_annotation(cert_annotation: Option<&String>, route_name: &str, route_namespace: &str) -> String {
     match cert_annotation {
-        Some(cert_annotation) => format!("{},{}:{}", cert_annotation, route_namespace, route_name),
+        Some(cert_annotation) => {
+            let mut annotations: HashSet<String> = HashSet::new();
+            cert_annotation.split(",").for_each(|annotation| { annotations.insert(annotation.to_owned()); });
+            annotations.insert(format!("{}:{}", route_namespace, route_name));
+            annotations.into_iter().collect::<Vec<String>>().join(",")
+        },
         None => format!("{}:{}", route_namespace, route_name)
     }
 }
