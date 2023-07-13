@@ -4,7 +4,7 @@ pub mod route;
 pub mod tools;
 pub mod types;
 
-use certificate::{annotate_cert, certificate_exists, create_certificate};
+use certificate::{annotate_cert, certificate_exists, create_certificate, is_cert_annotated};
 use crd::{certificate::Certificate, route::Route};
 use futures::StreamExt;
 use kube::{
@@ -12,7 +12,7 @@ use kube::{
     runtime::reflector::ObjectRef,
     Api, Client, ResourceExt,
 };
-use route::{is_valid_route, populate_route_tls};
+use route::{is_tls_up_to_date, is_valid_route, populate_route_tls};
 use std::{sync::Arc, time::Duration};
 use tools::format_cert_name;
 use types::*;
@@ -64,8 +64,8 @@ async fn main() -> Result<(), kube::Error> {
     Ok(())
 }
 
-async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
-    if is_valid_route(&route).await {
+async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {
+    if is_valid_route(&route) {
         let route_name = route.name_any();
         let route_namespace = route.namespace().unwrap();
         let hostname = route.spec.host.as_ref().unwrap();
@@ -94,36 +94,42 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
             }
         }
 
-        match populate_route_tls(&route, &cert_name, &ctx).await {
-            Ok(_) => println!(
-                "Populated TLS for Route `{}:{}`",
-                &route_namespace, &route_name
-            ),
-            Err(e) => {
-                eprintln!(
-                    "Error populating TLS for Route `{}:{}`: {}",
-                    &route_namespace, &route_name, e
-                );
-                return Ok(Action::requeue(Duration::from_secs(
-                    REQUEUE_ERROR_DURATION_SLOW,
-                )));
-            }
+        match is_cert_annotated(&cert_name, &route, &ctx).await {
+            Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx).await {
+                Ok(_) => println!(
+                    "Annotated Certificate `{}:{}` for Route `{}:{}`",
+                    &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name
+                ),
+                Err(e) => {
+                    eprintln!(
+                        "Error annotating Certificate `{}:{}` requested by Route `{}:{}`: {}",
+                        &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e
+                    );
+                    return Ok(Action::requeue(Duration::from_secs(
+                        REQUEUE_ERROR_DURATION_SLOW,
+                    )));
+                }
+            },
+            _ => {}
         }
 
-        match annotate_cert(&cert_name, &route, &ctx).await {
-            Ok(_) => println!(
-                "Annotated Certificate `{}:{}` for Route `{}:{}`",
-                &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name
-            ),
-            Err(e) => {
-                eprintln!(
-                    "Error annotating Certificate `{}:{}` requested by Route `{}:{}`: {}",
-                    &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e
-                );
-                return Ok(Action::requeue(Duration::from_secs(
-                    REQUEUE_ERROR_DURATION_SLOW,
-                )));
-            }
+        match is_tls_up_to_date(&route, &cert_name, &ctx).await {
+            Ok(false) | Err(_) => match populate_route_tls(&route, &cert_name, &ctx).await {
+                Ok(_) => println!(
+                    "Populated TLS for Route `{}:{}`",
+                    &route_namespace, &route_name
+                ),
+                Err(e) => {
+                    eprintln!(
+                        "Error populating TLS for Route `{}:{}`: {}",
+                        &route_namespace, &route_name, e
+                    );
+                    return Ok(Action::requeue(Duration::from_secs(
+                        REQUEUE_ERROR_DURATION_SLOW,
+                    )));
+                }
+            },
+            _ => {}
         }
     }
     Ok(Action::requeue(Duration::from_secs(
@@ -132,7 +138,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
 }
 
 fn error_policy(route: Arc<Route>, err: &Error, _ctx: Arc<ContextData>) -> Action {
-    eprint!(
+    eprintln!(
         "Error reconciling Route `{}:{}`: {}",
         &route.namespace().unwrap(),
         &route.name_any(),
