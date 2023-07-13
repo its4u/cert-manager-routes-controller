@@ -5,28 +5,29 @@ use crate::crd::{
     },
     route::Route,
 };
-use crate::tools::{format_cert_annotation, format_cert_name, format_secret_name};
+use crate::tools::{format_cert_annotation, format_cert_name, format_secret_name, route_to_string};
 use crate::types::{ContextData, Result};
 use crate::{CERT_ANNOTATION_KEY, ISSUER_ANNOTATION_KEY};
 use kube::{
     api::{ObjectMeta, Patch, PatchParams, PostParams},
     core::PartialObjectMetaExt,
-    Api, ResourceExt,
+    Api,
 };
+use std::collections::HashSet;
 
 pub async fn annotate_cert(
     cert_name: &String,
     route: &Route,
     ctx: &ContextData,
 ) -> Result<(), kube::Error> {
-    let mut annotations = route.metadata.annotations.clone().unwrap_or_default();
-    let route_name = route.name_any();
-    let route_namespace = route.namespace().unwrap();
-    let annotation = format_cert_annotation(
-        annotations.get(CERT_ANNOTATION_KEY),
-        &route_name,
-        &route_namespace,
-    );
+    let mut annotations =
+        Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
+            .get(cert_name)
+            .await?
+            .metadata
+            .annotations
+            .unwrap_or_default();
+    let annotation = format_cert_annotation(annotations.get(CERT_ANNOTATION_KEY), &route);
     let _ = annotations.insert(CERT_ANNOTATION_KEY.to_owned(), annotation);
     let _ = Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
         .patch_metadata(
@@ -92,10 +93,6 @@ pub async fn create_certificate(
         },
     };
     let cert = cert_api.create(&PostParams::default(), &cert).await?;
-    println!(
-        "Created Certificate `{}` in namespace {}",
-        &cert_name, &ctx.cert_manager_namespace
-    );
     Ok(cert)
 }
 
@@ -106,5 +103,28 @@ pub async fn certificate_exists(cert_name: &str, ctx: &ContextData) -> bool {
     {
         Ok(_) => true,
         Err(_) => false,
+    }
+}
+
+pub async fn is_cert_annotated(
+    cert_name: &str,
+    route: &Route,
+    ctx: &ContextData,
+) -> Result<bool, kube::Error> {
+    let cert = Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
+        .get(cert_name)
+        .await?;
+    match cert.metadata.annotations {
+        Some(annotations) => {
+            if let Some(annotation) = annotations.get(CERT_ANNOTATION_KEY) {
+                Ok(
+                    HashSet::<String>::from_iter(annotation.split(",").map(|s| s.to_owned()))
+                        .contains(&route_to_string(&route)),
+                )
+            } else {
+                Ok(false)
+            }
+        }
+        None => Ok(false),
     }
 }
