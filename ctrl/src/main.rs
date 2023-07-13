@@ -12,7 +12,7 @@ use kube::{
     runtime::reflector::ObjectRef,
 };
 use crd::{route::Route, certificate::Certificate};
-use route::is_valid_route;
+use route::{is_valid_route, populate_route_tls};
 use certificate::{annotate_cert, create_certificate, certificate_exists};
 use types::*;
 use tools::format_cert_name;
@@ -74,7 +74,13 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
             }
         }
         
-        // populate route tls 
+        match populate_route_tls(&route, &cert_name, &ctx).await {
+            Ok(_) => println!("Populated TLS for Route `{}:{}`", &route_namespace, &route_name),
+            Err(e) => {
+                eprintln!("Error populating TLS for Route `{}:{}`: {}", &route_namespace, &route_name, e);
+                return Ok(Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_SLOW)))
+            }
+        }
 
         match annotate_cert(&cert_name, &route, &ctx).await {
             Ok(_) => println!("Annotated Certificate `{}:{}` for Route `{}:{}`", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name),
@@ -87,6 +93,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
     Ok(Action::requeue(Duration::from_secs(REQUEUE_DEFAULT_INTERVAL)))
 }
 
-fn error_policy(_object: Arc<Route>, _err: &Error, _ctx: Arc<ContextData>) -> Action {
+fn error_policy(route: Arc<Route>, err: &Error, _ctx: Arc<ContextData>) -> Action {
+    eprint!("Error reconciling Route `{}:{}`: {}", &route.namespace().unwrap(), &route.name_any(), err);
     Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_FAST))
 }
