@@ -1,21 +1,21 @@
-pub mod crd;
-pub mod types;
-pub mod tools;
-pub mod route;
 pub mod certificate;
+pub mod crd;
+pub mod route;
+pub mod tools;
+pub mod types;
 
-use std::{sync::Arc, time::Duration};
+use certificate::{annotate_cert, certificate_exists, create_certificate};
+use crd::{certificate::Certificate, route::Route};
 use futures::StreamExt;
 use kube::{
-    Api, Client, ResourceExt,
     runtime::controller::{Action, Controller},
     runtime::reflector::ObjectRef,
+    Api, Client, ResourceExt,
 };
-use crd::{route::Route, certificate::Certificate};
 use route::{is_valid_route, populate_route_tls};
-use certificate::{annotate_cert, create_certificate, certificate_exists};
-use types::*;
+use std::{sync::Arc, time::Duration};
 use tools::format_cert_name;
+use types::*;
 
 const REQUEUE_DEFAULT_INTERVAL: u64 = 3600;
 const REQUEUE_ERROR_DURATION_SLOW: u64 = 120;
@@ -27,31 +27,40 @@ pub const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
 
 #[tokio::main]
 async fn main() -> Result<(), kube::Error> {
-    let cert_manager_namespace = std::env::var(CERT_MANAGER_NAMESPACE_ENV).unwrap_or(DEFAULT_CERT_MANAGER_NAMESPACE.to_owned());
-    let context = Arc::new(
-        ContextData::new(
-            Client::try_default().await?, 
-            cert_manager_namespace, 
-        )
-    );
-    Controller::new(Api::<Route>::all(context.client.clone()), Default::default())
-        .watches(
-            Api::<Certificate>::all(context.client.clone()), 
-            Default::default(),
-            |obj| obj.annotations().get(CERT_ANNOTATION_KEY).unwrap_or(&String::from("")).split(",").map(|s| {
-                let splitted = s.split_once(":");
-                if splitted == None {
-                    eprintln!("Invalid annotation value: {}", s);
-                    ObjectRef::new("")
-                } else {
-                    let (namespace, name) = splitted.unwrap();
-                    ObjectRef::new(name).within(namespace)
-                }
-            }).collect::<Vec<_>>()
-        )
-        .run(reconcile, error_policy, context)
-        .for_each(|_| futures::future::ready(()))
-        .await;
+    let cert_manager_namespace = std::env::var(CERT_MANAGER_NAMESPACE_ENV)
+        .unwrap_or(DEFAULT_CERT_MANAGER_NAMESPACE.to_owned());
+    let context = Arc::new(ContextData::new(
+        Client::try_default().await?,
+        cert_manager_namespace,
+    ));
+    Controller::new(
+        Api::<Route>::all(context.client.clone()),
+        Default::default(),
+    )
+    .watches(
+        Api::<Certificate>::all(context.client.clone()),
+        Default::default(),
+        |obj| {
+            obj.annotations()
+                .get(CERT_ANNOTATION_KEY)
+                .unwrap_or(&String::from(""))
+                .split(",")
+                .map(|s| {
+                    let splitted = s.split_once(":");
+                    if splitted == None {
+                        eprintln!("Invalid annotation value: {}", s);
+                        ObjectRef::new("")
+                    } else {
+                        let (namespace, name) = splitted.unwrap();
+                        ObjectRef::new(name).within(namespace)
+                    }
+                })
+                .collect::<Vec<_>>()
+        },
+    )
+    .run(reconcile, error_policy, context)
+    .for_each(|_| futures::future::ready(()))
+    .await;
     Ok(())
 }
 
@@ -62,38 +71,72 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action> {
         let hostname = route.spec.host.as_ref().unwrap();
         let cert_name = format_cert_name(&hostname);
 
-        println!("reconcile request from Route `{}:{}",  &route_namespace, &route_name);
+        println!(
+            "reconcile request from Route `{}:{}",
+            &route_namespace, &route_name
+        );
 
         if !certificate_exists(&cert_name, &ctx).await {
             match create_certificate(&route, &ctx).await {
-                Ok(_) => println!("Created Certificate `{}:{}` requested by Route `{}:{}`", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name),
+                Ok(_) => println!(
+                    "Created Certificate `{}:{}` requested by Route `{}:{}`",
+                    &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name
+                ),
                 Err(e) => {
-                    eprintln!("Error creating Certificate `{}:{}` requested by Route `{}:{}`: {}", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e);
-                    return Ok(Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_SLOW)))
+                    eprintln!(
+                        "Error creating Certificate `{}:{}` requested by Route `{}:{}`: {}",
+                        &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e
+                    );
+                    return Ok(Action::requeue(Duration::from_secs(
+                        REQUEUE_ERROR_DURATION_SLOW,
+                    )));
                 }
             }
         }
-        
+
         match populate_route_tls(&route, &cert_name, &ctx).await {
-            Ok(_) => println!("Populated TLS for Route `{}:{}`", &route_namespace, &route_name),
+            Ok(_) => println!(
+                "Populated TLS for Route `{}:{}`",
+                &route_namespace, &route_name
+            ),
             Err(e) => {
-                eprintln!("Error populating TLS for Route `{}:{}`: {}", &route_namespace, &route_name, e);
-                return Ok(Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_SLOW)))
+                eprintln!(
+                    "Error populating TLS for Route `{}:{}`: {}",
+                    &route_namespace, &route_name, e
+                );
+                return Ok(Action::requeue(Duration::from_secs(
+                    REQUEUE_ERROR_DURATION_SLOW,
+                )));
             }
         }
 
         match annotate_cert(&cert_name, &route, &ctx).await {
-            Ok(_) => println!("Annotated Certificate `{}:{}` for Route `{}:{}`", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name),
+            Ok(_) => println!(
+                "Annotated Certificate `{}:{}` for Route `{}:{}`",
+                &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name
+            ),
             Err(e) => {
-                eprintln!("Error annotating Certificate `{}:{}` requested by Route `{}:{}`: {}", &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e);
-                return Ok(Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_SLOW)));
+                eprintln!(
+                    "Error annotating Certificate `{}:{}` requested by Route `{}:{}`: {}",
+                    &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e
+                );
+                return Ok(Action::requeue(Duration::from_secs(
+                    REQUEUE_ERROR_DURATION_SLOW,
+                )));
             }
         }
     }
-    Ok(Action::requeue(Duration::from_secs(REQUEUE_DEFAULT_INTERVAL)))
+    Ok(Action::requeue(Duration::from_secs(
+        REQUEUE_DEFAULT_INTERVAL,
+    )))
 }
 
 fn error_policy(route: Arc<Route>, err: &Error, _ctx: Arc<ContextData>) -> Action {
-    eprint!("Error reconciling Route `{}:{}`: {}", &route.namespace().unwrap(), &route.name_any(), err);
+    eprint!(
+        "Error reconciling Route `{}:{}`: {}",
+        &route.namespace().unwrap(),
+        &route.name_any(),
+        err
+    );
     Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_FAST))
 }

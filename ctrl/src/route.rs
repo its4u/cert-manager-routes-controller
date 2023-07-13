@@ -1,11 +1,11 @@
-use crate::ISSUER_ANNOTATION_KEY;
 use crate::types::ContextData;
+use crate::ISSUER_ANNOTATION_KEY;
 
-use kube::{Api, ResourceExt, api::{Patch, PatchParams}};
+use crate::crd::{certificate::Certificate, route::Route};
 use k8s_openapi::api::core::v1::Secret;
-use crate::crd::{
-    certificate::Certificate,
-    route::Route,
+use kube::{
+    api::{Patch, PatchParams},
+    Api, ResourceExt,
 };
 use serde_json;
 
@@ -18,19 +18,37 @@ const CA_CRT: &'static str = "ca.crt";
 pub async fn is_valid_route(route: &Route) -> bool {
     if route.spec.host == None
         || route.metadata.annotations == None
-        || route.metadata.annotations.as_ref().unwrap().get(ISSUER_ANNOTATION_KEY) == None {
+        || route
+            .metadata
+            .annotations
+            .as_ref()
+            .unwrap()
+            .get(ISSUER_ANNOTATION_KEY)
+            == None
+    {
         false
     } else {
         true
     }
 }
 
-pub async fn populate_route_tls(route: &Route, cert_name: &str, ctx: &ContextData) -> Result<(), kube::Error> {
-    let certificate = Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace).get(&cert_name).await?;
-    let secret = Api::<Secret>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace).get(&certificate.spec.secret_name).await?;
+pub async fn populate_route_tls(
+    route: &Route,
+    cert_name: &str,
+    ctx: &ContextData,
+) -> Result<(), kube::Error> {
+    let certificate =
+        Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
+            .get(&cert_name)
+            .await?;
+    let secret = Api::<Secret>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
+        .get(&certificate.spec.secret_name)
+        .await?;
     let data = secret.data.as_ref().unwrap();
-    if data.get(TLS_CRT) == None || data.get(TLS_KEY) == None  {
-        Err(kube::error::Error::Discovery(kube::error::DiscoveryError::MissingResource("tls".to_owned())))
+    if data.get(TLS_CRT) == None || data.get(TLS_KEY) == None {
+        Err(kube::error::Error::Discovery(
+            kube::error::DiscoveryError::MissingResource("tls".to_owned()),
+        ))
     } else {
         let cert = std::str::from_utf8(&data.get(TLS_CRT).unwrap().0).unwrap();
         let key = std::str::from_utf8(&data.get(TLS_KEY).unwrap().0).unwrap();
@@ -51,7 +69,13 @@ pub async fn populate_route_tls(route: &Route, cert_name: &str, ctx: &ContextDat
                 }
             }
         });
-        let _ = routes.patch(&route.name_any(), &PatchParams::default(), &Patch::Merge(&patch)).await?;
+        let _ = routes
+            .patch(
+                &route.name_any(),
+                &PatchParams::default(),
+                &Patch::Merge(&patch),
+            )
+            .await?;
         Ok(())
     }
 }
