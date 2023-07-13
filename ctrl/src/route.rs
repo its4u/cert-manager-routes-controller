@@ -1,8 +1,8 @@
 use crate::types::ContextData;
 use crate::ISSUER_ANNOTATION_KEY;
 
-use crate::crd::{certificate::Certificate, route::Route};
-use k8s_openapi::api::core::v1::Secret;
+use crate::crd::route::Route;
+use crate::tools::get_secret_tls_data;
 use kube::{
     api::{Patch, PatchParams},
     Api, ResourceExt,
@@ -11,11 +11,11 @@ use serde_json;
 
 const TERMINATION: &'static str = "edge";
 const REDIRECT_POLICY: &'static str = "Redirect";
-const TLS_CRT: &'static str = "tls.crt";
-const TLS_KEY: &'static str = "tls.key";
+pub const TLS_CRT: &'static str = "tls.crt";
+pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
 
-pub async fn is_valid_route(route: &Route) -> bool {
+pub fn is_valid_route(route: &Route) -> bool {
     if route.spec.host == None
         || route.metadata.annotations == None
         || route
@@ -37,45 +37,63 @@ pub async fn populate_route_tls(
     cert_name: &str,
     ctx: &ContextData,
 ) -> Result<(), kube::Error> {
-    let certificate =
-        Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
-            .get(&cert_name)
-            .await?;
-    let secret = Api::<Secret>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
-        .get(&certificate.spec.secret_name)
-        .await?;
-    let data = secret.data.as_ref().unwrap();
-    if data.get(TLS_CRT) == None || data.get(TLS_KEY) == None {
-        Err(kube::error::Error::Discovery(
-            kube::error::DiscoveryError::MissingResource("tls".to_owned()),
-        ))
+    let data = get_secret_tls_data(&cert_name, &ctx).await?;
+    let cert = std::str::from_utf8(&data.get(TLS_CRT).unwrap().0).unwrap();
+    let key = std::str::from_utf8(&data.get(TLS_KEY).unwrap().0).unwrap();
+    let ca = if data.get(CA_CRT) == None {
+        None
     } else {
-        let cert = std::str::from_utf8(&data.get(TLS_CRT).unwrap().0).unwrap();
-        let key = std::str::from_utf8(&data.get(TLS_KEY).unwrap().0).unwrap();
-        let ca = if data.get(CA_CRT) == None {
-            None
-        } else {
-            Some(std::str::from_utf8(&data.get(TLS_CRT).unwrap().0).unwrap())
-        };
-        let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
-        let patch = serde_json::json!({
-            "spec": {
-                "tls": {
-                    "termination": TERMINATION,
-                    "insecureEdgeTerminationPolicy": REDIRECT_POLICY,
-                    "key": key,
-                    "certificate": cert,
-                    "caCertificate": ca.unwrap_or_default()
-                }
+        Some(std::str::from_utf8(&data.get(TLS_CRT).unwrap().0).unwrap())
+    };
+    let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
+    let patch = serde_json::json!({
+        "spec": {
+            "tls": {
+                "termination": TERMINATION,
+                "insecureEdgeTerminationPolicy": REDIRECT_POLICY,
+                "key": key,
+                "certificate": cert,
+                "caCertificate": ca.unwrap_or_default()
             }
-        });
-        let _ = routes
-            .patch(
-                &route.name_any(),
-                &PatchParams::default(),
-                &Patch::Merge(&patch),
-            )
-            .await?;
-        Ok(())
+        }
+    });
+    let _ = routes
+        .patch(
+            &route.name_any(),
+            &PatchParams::default(),
+            &Patch::Merge(&patch),
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn is_tls_up_to_date(
+    route: &Route,
+    cert_name: &str,
+    ctx: &ContextData,
+) -> Result<bool, kube::Error> {
+    let secret_data = get_secret_tls_data(cert_name, &ctx).await?;
+    if let Some(tls) = route.clone().spec.tls {
+        if tls.key == None || tls.certificate == None {
+            return Ok(false);
+        }
+        if tls.certificate.unwrap()
+            != std::str::from_utf8(&secret_data.get(TLS_CRT).unwrap().0).unwrap()
+            || tls.key.unwrap()
+                != std::str::from_utf8(&secret_data.get(TLS_KEY).unwrap().0).unwrap()
+        {
+            return Ok(false);
+        }
+        if secret_data.get(CA_CRT) != None {
+            if tls.ca_certificate == None
+                || tls.ca_certificate.unwrap()
+                    != std::str::from_utf8(&secret_data.get(CA_CRT).unwrap().0).unwrap()
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    } else {
+        Ok(false)
     }
 }
