@@ -1,6 +1,5 @@
 use crate::types::ContextData;
 use crate::ISSUER_ANNOTATION_KEY;
-
 use crate::crd::route::Route;
 use crate::tools::{get_secret_tls_data, resource_to_string};
 use kube::{
@@ -16,12 +15,32 @@ pub const TLS_CRT: &'static str = "tls.crt";
 pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
 
+/// Implement the [`fmt::Display`] trait for a [`Route`]. 
+/// It writes the data in [`resource_to_string()`] format.
 impl fmt::Display for Route {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", resource_to_string(&self.name_any(), &self.namespace().unwrap()))
     }
 }
 
+/// Check whether a [`Route`] is should be handled by the controller.
+/// 
+/// A [`Route`] is valid if it has a [`spec.host`] and an [`ISSUER_ANNOTATION_KEY`] annotation.
+/// 
+/// ### Arguments
+/// 
+/// * `route` - The [`Route`] to check.
+/// 
+/// ### Returns
+/// 
+/// A [`bool`] indicating whether the [`Route`] is valid.
+/// 
+/// ### Example
+/// 
+/// ```rust
+/// let valid = is_valid_route(&route).await?;
+/// println!("Valid Route: {}", valid);
+/// ```
 pub fn is_valid_route(route: &Route) -> bool {
     if route.spec.host == None
         || route.metadata.annotations == None
@@ -39,6 +58,25 @@ pub fn is_valid_route(route: &Route) -> bool {
     }
 }
 
+/// Populate the TLS section of a [`Route`] with the data from a [`Certificate`].
+/// 
+/// ### Arguments
+/// 
+/// * `route` - The [`Route`] to populate.
+/// * `cert_name` - The name of the [`Certificate`] to use.
+/// * `ctx` - The [`ContextData`].
+/// 
+/// ### Returns
+/// 
+/// A [`Result`] containing `()` or a [`kube::Error`].
+/// 
+/// ### Example
+/// 
+/// ```rust
+/// match populate_route_tls(&route, &cert_name, &ctx).await {
+///     Ok(_) => println!("Route TLS populated"),
+///     Err(e) => eprintln!("Error populating Route TLS: {}", e),
+/// }
 pub async fn populate_route_tls(
     route: &Route,
     cert_name: &str,
@@ -74,6 +112,24 @@ pub async fn populate_route_tls(
     Ok(())
 }
 
+/// Check whether a [`Route`]'s TLS is up to date the latest related [`Certificate`].
+/// 
+/// ### Arguments
+/// 
+/// * `route` - The [`Route`] to check.
+/// * `cert_name` - The name of the [`Certificate`] to use.
+/// * `ctx` - The [`ContextData`].
+/// 
+/// ### Returns
+/// 
+/// A [`Result`] containing a [`bool`] indicating whether the [`Route`]'s TLS is up to date or a [`kube::Error`].
+/// 
+/// ### Example
+/// 
+/// ```rust
+/// let up_to_date = is_tls_up_to_date(&route, &cert_name, &ctx).await?;
+/// println!("TLS up to date: {}", up_to_date);
+/// ```
 pub async fn is_tls_up_to_date(
     route: &Route,
     cert_name: &str,

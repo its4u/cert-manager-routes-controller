@@ -25,14 +25,19 @@ pub const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
 pub const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
 pub const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
 
+/// The main function initializes the controller and runs it in a multi-threaded context.
+/// 
+/// The controller watches for [`Route`] and matching [`Certificate`] events.
 #[tokio::main]
 async fn main() -> Result<(), kube::Error> {
     let cert_manager_namespace = std::env::var(CERT_MANAGER_NAMESPACE_ENV)
         .unwrap_or(DEFAULT_CERT_MANAGER_NAMESPACE.to_owned());
+
     let context = Arc::new(ContextData::new(
         Client::try_default().await?,
         cert_manager_namespace,
     ));
+
     Controller::new(
         Api::<Route>::all(context.client.clone()),
         Default::default(),
@@ -64,6 +69,14 @@ async fn main() -> Result<(), kube::Error> {
     Ok(())
 }
 
+/// The reconcile function is called for each [`Route`] event and related [`Certificate`] events by the main controller.
+/// 
+/// It checks if the [`Route`] is valid, 
+/// if a [`Certificate`] exists for the [`Route`]'s hostname, 
+/// if the [`Certificate`] is annotated with the [`Route`]'s name and namespace 
+/// and if the [`Route`]'s TLS is up to date.
+/// 
+/// This function is idempotent.
 async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {    
     if is_valid_route(&route) {
         let hostname = route.spec.host.as_ref().unwrap();
@@ -131,6 +144,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
     )))
 }
 
+/// The error policy function is called by the controller when an unexpected error occurs during the reconcile function.
 fn error_policy(route: Arc<Route>, err: &Error, _ctx: Arc<ContextData>) -> Action {
     eprintln!(
         "Error reconciling Route `{}`: {}",
