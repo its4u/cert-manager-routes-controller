@@ -15,6 +15,68 @@ use kube::{
 use std::collections::HashSet;
 use std::fmt;
 
+impl Certificate {
+    /// Create a new [`Certificate`] with some default values.
+    /// 
+    /// ### Arguments
+    /// 
+    /// * `name` - The name of the [`Certificate`].
+    /// * `hostname` - The dnsName of the [`Certificate`].
+    /// * `issuer_name` - The `ClusterIssuer` to use for the [`Certificate`]
+    /// * `ctx` - The [`ContextData`].
+    /// 
+    /// ### Returns
+    /// 
+    /// A new [`Certificate`] instance.
+    /// 
+    /// ### Example
+    /// 
+    /// ```rust
+    /// let cert = Certificate::new_default(&name, &hostname, &issuer_name, &ctx);
+    /// println!("Created Certificate: {}", cert);
+    /// ```
+    fn new_default(name: &String, hostname: &String, issuer_name: &String, ctx: &ContextData) -> Self {
+        Certificate {
+            status: None,
+            metadata: ObjectMeta {
+                name: Some(name.clone()),
+                namespace: Some(ctx.cert_manager_namespace.clone()),
+                ..Default::default()
+            },
+            spec: CertificateSpec {
+                secret_name: format_secret_name(&hostname),
+                dns_names: Some(vec![hostname.clone()]),
+                issuer_ref: CertificateIssuerRef {
+                    name: issuer_name.clone(),
+                    kind: Some("ClusterIssuer".to_owned()),
+                    group: Some("cert-manager.io".to_owned()),
+                },
+                is_ca: Some(false),
+                private_key: Some(CertificatePrivateKey {
+                    algorithm: Some(CertificatePrivateKeyAlgorithm::Ecdsa),
+                    encoding: None,
+                    rotation_policy: None,
+                    size: Some(256),
+                }),
+                additional_output_formats: None,
+                common_name: None,
+                duration: None,
+                email_addresses: None,
+                encode_usages_in_request: None,
+                ip_addresses: None,
+                keystores: None,
+                literal_subject: None,
+                renew_before: None,
+                revision_history_limit: None,
+                secret_template: None,
+                subject: None,
+                uris: None,
+                usages: None,
+            }
+        }
+    }
+}
+
 /// Implement the [`fmt::Display`] trait for a [`Certificate`]. 
 /// It writes the data in [`resource_to_string()`] format.
 impl fmt::Display for Certificate {
@@ -100,46 +162,8 @@ pub async fn create_certificate(
     let cert_name = format_cert_name(&hostname);
     let cert_api: Api<Certificate> =
         Api::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace);
-    let cert = Certificate {
-        status: None,
-        metadata: ObjectMeta {
-            name: Some(cert_name.clone()),
-            namespace: Some(ctx.cert_manager_namespace.clone()),
-            ..Default::default()
-        },
-        spec: CertificateSpec {
-            secret_name: format_secret_name(&hostname),
-            dns_names: Some(vec![hostname.clone()]),
-            issuer_ref: CertificateIssuerRef {
-                name: annotations.get(ISSUER_ANNOTATION_KEY).unwrap().to_owned(),
-                kind: Some("ClusterIssuer".to_owned()),
-                group: Some("cert-manager.io".to_owned()),
-            },
-            is_ca: Some(false),
-            private_key: Some(CertificatePrivateKey {
-                algorithm: Some(CertificatePrivateKeyAlgorithm::Ecdsa),
-                encoding: None,
-                rotation_policy: None,
-                size: Some(256),
-            }),
-            additional_output_formats: None,
-            common_name: None,
-            duration: None,
-            email_addresses: None,
-            encode_usages_in_request: None,
-            ip_addresses: None,
-            keystores: None,
-            literal_subject: None,
-            renew_before: None,
-            revision_history_limit: None,
-            secret_template: None,
-            subject: None,
-            uris: None,
-            usages: None,
-        },
-    };
-    let cert = cert_api.create(&PostParams::default(), &cert).await?;
-    Ok(cert)
+    let cert = Certificate::new_default(&cert_name, &hostname, &annotations.get(ISSUER_ANNOTATION_KEY).unwrap().to_owned(), &ctx);
+    Ok(cert_api.create(&PostParams::default(), &cert).await?)
 }
 
 /// Check whether a [`Certificate`] exists.
