@@ -28,6 +28,12 @@ pub fn resource_to_string(name: &str, namespace: &str) -> String {
     format!("{}:{}", namespace, name)
 }
 
+#[test]
+fn test_resource_to_string() {
+    assert_eq!(resource_to_string("name", "namespace"), "namespace:name");
+    assert_ne!(resource_to_string("name", "namespace"), "name:namespace");
+}
+
 /// Format a [`Certificate`] annotation value in the format `namespace:name(,namespace:name)*`.
 /// 
 /// If the annotation doesn't exists yet, the annotation value will contain a single route. 
@@ -50,6 +56,8 @@ pub fn resource_to_string(name: &str, namespace: &str) -> String {
 /// ```
 pub fn format_cert_annotation(cert_annotation: Option<&String>, route: &Route) -> String {
     match cert_annotation {
+        Some(cert_annotation) if cert_annotation.is_empty() => route.to_string(),
+        None => route.to_string(),
         Some(cert_annotation) => {
             let mut annotations: HashSet<String> = HashSet::new();
             cert_annotation.split(",").for_each(|annotation| {
@@ -58,8 +66,16 @@ pub fn format_cert_annotation(cert_annotation: Option<&String>, route: &Route) -
             annotations.insert(route.to_string());
             annotations.into_iter().collect::<Vec<String>>().join(",")
         }
-        None => route.to_string(),
     }
+}
+
+#[test]
+fn test_format_cert_annotation(){
+    let route = Route::new_test_route(&"world".to_owned(), &"hello".to_owned(), &"example.com".to_owned(), None, None);
+    assert_eq!(format_cert_annotation(None, &route), "hello:world");
+    assert_eq!(format_cert_annotation(Some(&"".to_owned()), &route), "hello:world");
+    assert_eq!(format_cert_annotation(Some(&"foo:bar".to_owned()), &route), "foo:bar,hello:world");
+    assert_eq!(format_cert_annotation(Some(&"foo:bar,alice:bob".to_owned()), &route), "foo:bar,alice:bob,hello:world");
 }
 
 /// Format a [`Certificate`] name in the format `hostname-cert`.
@@ -82,6 +98,12 @@ pub fn format_cert_name(hostname: &str) -> String {
     format!("{}-cert", hostname)
 }
 
+#[test]
+fn test_format_cert_name() {
+    assert_eq!(format_cert_name("example.com"), "example.com-cert");
+    assert_ne!(format_cert_name("example.com"), "example.com");
+}
+
 /// Format a [`Secret`] name in the format `hostname-tls`.
 /// 
 /// ### Arguments
@@ -100,6 +122,12 @@ pub fn format_cert_name(hostname: &str) -> String {
 /// ```
 pub fn format_secret_name(hostname: &str) -> String {
     format!("{}-tls", hostname)
+}
+
+#[test]
+fn test_format_secret_name() {
+    assert_eq!(format_secret_name("example.com"), "example.com-tls");
+    assert_ne!(format_secret_name("example.com"), "example.com");
 }
 
 /// Get the TLS data from a [`Secret`]'s [`Certificate`].

@@ -7,6 +7,7 @@ use kube::{
     Api, ResourceExt,
 };
 use serde_json;
+use std::collections::BTreeMap;
 use std::fmt;
 use kube::api::ObjectMeta;
 
@@ -37,12 +38,20 @@ impl Route {
     /// let route = Route::new_default(&name, &namespace, &hostname);
     /// println!("Created Route: {}", route); // Created Route: namespace:name
     /// ```
-    pub fn new_test_route(name: &String, namespace: &String, hostname: &String) -> Self {
+    pub fn new_test_route(name: &String, namespace: &String, hostname: &String, cert_manager_issuer: Option<&String>, annotation_key: Option<&String>) -> Self {
         Route {
             status: None,
             metadata: ObjectMeta {
                 name: Some(name.clone()),
                 namespace: Some(namespace.clone()),
+                annotations: match cert_manager_issuer {
+                    Some(issuer) => {
+                        let mut annotations = BTreeMap::new();
+                        let _ = annotations.insert(annotation_key.unwrap().clone(), issuer.clone());
+                        Some(annotations)
+                    },
+                    None => None,
+                },
                 ..Default::default()
             },
             spec: RouteSpec {
@@ -104,6 +113,17 @@ pub fn is_valid_route(route: &Route) -> bool {
     } else {
         true
     }
+}
+
+#[test]
+fn test_is_valid_route() {
+    let route = Route::new_test_route(&"test_name".to_owned(), &"test_ns".to_owned(), &"test_host".to_owned(), None, None);
+    assert_eq!(is_valid_route(&route), false);
+    let route = Route::new_test_route(&"test".to_owned(), &"test".to_owned(), &"test".to_owned(), Some(&"test".to_owned()), Some(&"foo".to_owned()));
+    assert_eq!(is_valid_route(&route), false);
+
+    let route = Route::new_test_route(&"test".to_owned(), &"test".to_owned(), &"test".to_owned(), Some(&"test".to_owned()), Some(&ISSUER_ANNOTATION_KEY.to_owned()));
+    assert_eq!(is_valid_route(&route), true);
 }
 
 /// Populate the TLS section of a [`Route`] with the data from a [`Certificate`].
