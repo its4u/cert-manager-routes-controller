@@ -5,21 +5,27 @@ use crate::crd::{
     },
     route::Route,
 };
-use crate::tools::{format_cert_annotation, format_cert_name, format_secret_name, route_to_string};
+use crate::tools::{format_cert_annotation, format_cert_name, format_secret_name, resource_to_string};
 use crate::types::{ContextData, Result};
 use crate::{CERT_ANNOTATION_KEY, ISSUER_ANNOTATION_KEY};
 use kube::{
     api::{ObjectMeta, Patch, PatchParams, PostParams},
-    core::PartialObjectMetaExt,
     Api,
 };
 use std::collections::HashSet;
+use std::fmt;
+
+impl fmt::Display for Certificate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", resource_to_string(self.metadata.name.as_ref().unwrap(), self.metadata.namespace.as_ref().unwrap()))
+    }
+}
 
 pub async fn annotate_cert(
     cert_name: &String,
     route: &Route,
     ctx: &ContextData,
-) -> Result<(), kube::Error> {
+) -> Result<Certificate, kube::Error> {
     let mut annotations =
         Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
             .get(cert_name)
@@ -29,20 +35,20 @@ pub async fn annotate_cert(
             .unwrap_or_default();
     let annotation = format_cert_annotation(annotations.get(CERT_ANNOTATION_KEY), &route);
     let _ = annotations.insert(CERT_ANNOTATION_KEY.to_owned(), annotation);
-    let _ = Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
-        .patch_metadata(
+    let cert = Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
+        .patch(
             cert_name,
             &PatchParams::default(),
             &Patch::Merge(
-                &ObjectMeta {
-                    annotations: Some(annotations),
-                    ..Default::default()
-                }
-                .into_request_partial::<Certificate>(),
+                &serde_json::json!({
+                    "metadata": {
+                        "annotations": annotations,
+                    }
+                })
             ),
         )
         .await?;
-    Ok(())
+    Ok(cert)
 }
 
 pub async fn create_certificate(
@@ -119,7 +125,7 @@ pub async fn is_cert_annotated(
             if let Some(annotation) = annotations.get(CERT_ANNOTATION_KEY) {
                 Ok(
                     HashSet::<String>::from_iter(annotation.split(",").map(|s| s.to_owned()))
-                        .contains(&route_to_string(&route)),
+                        .contains(&route.to_string()),
                 )
             } else {
                 Ok(false)

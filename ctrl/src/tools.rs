@@ -7,8 +7,8 @@ use kube::{Api, ResourceExt};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 
-pub fn route_to_string(route: &Route) -> String {
-    format!("{}:{}", route.namespace().unwrap(), route.name_any())
+pub fn resource_to_string(name: &str, namespace: &str) -> String {
+    format!("{}:{}", namespace, name)
 }
 
 pub fn format_cert_annotation(cert_annotation: Option<&String>, route: &Route) -> String {
@@ -18,10 +18,10 @@ pub fn format_cert_annotation(cert_annotation: Option<&String>, route: &Route) -
             cert_annotation.split(",").for_each(|annotation| {
                 annotations.insert(annotation.to_owned());
             });
-            annotations.insert(route_to_string(&route));
+            annotations.insert(route.to_string());
             annotations.into_iter().collect::<Vec<String>>().join(",")
         }
-        None => route_to_string(&route),
+        None => route.to_string(),
     }
 }
 

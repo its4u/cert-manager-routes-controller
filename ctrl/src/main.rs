@@ -64,28 +64,21 @@ async fn main() -> Result<(), kube::Error> {
     Ok(())
 }
 
-async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {
+async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {    
     if is_valid_route(&route) {
-        let route_name = route.name_any();
-        let route_namespace = route.namespace().unwrap();
         let hostname = route.spec.host.as_ref().unwrap();
         let cert_name = format_cert_name(&hostname);
 
-        println!(
-            "reconcile request from Route `{}:{}",
-            &route_namespace, &route_name
-        );
-
         if !certificate_exists(&cert_name, &ctx).await {
             match create_certificate(&route, &ctx).await {
-                Ok(_) => println!(
-                    "Created Certificate `{}:{}` requested by Route `{}:{}`",
-                    &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name
+                Ok(certificate) => println!(
+                    "Created Certificate `{}` requested by Route `{}`",
+                    &certificate, &route
                 ),
                 Err(e) => {
                     eprintln!(
-                        "Error creating Certificate `{}:{}` requested by Route `{}:{}`: {}",
-                        &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e
+                        "Error creating Certificate `{}:{}` requested by Route `{}`: {}",
+                        &ctx.cert_manager_namespace, &cert_name, &route, e
                     );
                     return Ok(Action::requeue(Duration::from_secs(
                         REQUEUE_ERROR_DURATION_SLOW,
@@ -96,14 +89,14 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
 
         match is_cert_annotated(&cert_name, &route, &ctx).await {
             Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx).await {
-                Ok(_) => println!(
-                    "Annotated Certificate `{}:{}` for Route `{}:{}`",
-                    &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name
+                Ok(certificate) => println!(
+                    "Annotated Certificate `{}` for Route `{}`",
+                    &certificate, &route
                 ),
                 Err(e) => {
                     eprintln!(
-                        "Error annotating Certificate `{}:{}` requested by Route `{}:{}`: {}",
-                        &ctx.cert_manager_namespace, &cert_name, &route_namespace, &route_name, e
+                        "Error annotating Certificate `{}:{}` requested by Route `{}`: {}",
+                        &ctx.cert_manager_namespace, &cert_name, &route, e
                     );
                     return Ok(Action::requeue(Duration::from_secs(
                         REQUEUE_ERROR_DURATION_SLOW,
@@ -116,13 +109,13 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
         match is_tls_up_to_date(&route, &cert_name, &ctx).await {
             Ok(false) | Err(_) => match populate_route_tls(&route, &cert_name, &ctx).await {
                 Ok(_) => println!(
-                    "Populated TLS for Route `{}:{}`",
-                    &route_namespace, &route_name
+                    "Populated TLS for Route `{}`",
+                    &route
                 ),
                 Err(e) => {
                     eprintln!(
-                        "Error populating TLS for Route `{}:{}`: {}",
-                        &route_namespace, &route_name, e
+                        "Error populating TLS for Route `{}`: {}",
+                        &route, e
                     );
                     return Ok(Action::requeue(Duration::from_secs(
                         REQUEUE_ERROR_DURATION_SLOW,
@@ -132,6 +125,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
             _ => {}
         }
     }
+
     Ok(Action::requeue(Duration::from_secs(
         REQUEUE_DEFAULT_INTERVAL,
     )))
@@ -139,9 +133,8 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
 
 fn error_policy(route: Arc<Route>, err: &Error, _ctx: Arc<ContextData>) -> Action {
     eprintln!(
-        "Error reconciling Route `{}:{}`: {}",
-        &route.namespace().unwrap(),
-        &route.name_any(),
+        "Error reconciling Route `{}`: {}",
+        &route,
         err
     );
     Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_FAST))

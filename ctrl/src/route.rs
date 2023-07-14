@@ -2,18 +2,25 @@ use crate::types::ContextData;
 use crate::ISSUER_ANNOTATION_KEY;
 
 use crate::crd::route::Route;
-use crate::tools::get_secret_tls_data;
+use crate::tools::{get_secret_tls_data, resource_to_string};
 use kube::{
     api::{Patch, PatchParams},
     Api, ResourceExt,
 };
 use serde_json;
+use std::fmt;
 
 const TERMINATION: &'static str = "edge";
 const REDIRECT_POLICY: &'static str = "Redirect";
 pub const TLS_CRT: &'static str = "tls.crt";
 pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
+
+impl fmt::Display for Route {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", resource_to_string(&self.name_any(), &self.namespace().unwrap()))
+    }
+}
 
 pub fn is_valid_route(route: &Route) -> bool {
     if route.spec.host == None
