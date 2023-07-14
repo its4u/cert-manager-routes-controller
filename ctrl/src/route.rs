@@ -1,6 +1,6 @@
 use crate::types::ContextData;
 use crate::ISSUER_ANNOTATION_KEY;
-use crate::crd::route::Route;
+use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
 use crate::tools::{get_secret_tls_data, resource_to_string};
 use kube::{
     api::{Patch, PatchParams},
@@ -8,12 +8,60 @@ use kube::{
 };
 use serde_json;
 use std::fmt;
+use kube::api::ObjectMeta;
 
 const TERMINATION: &'static str = "edge";
 const REDIRECT_POLICY: &'static str = "Redirect";
 pub const TLS_CRT: &'static str = "tls.crt";
 pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
+
+impl Route {
+    /// Create a new test [`Route`] with some default values.
+    /// 
+    /// Implemented for testing purposes.
+    /// 
+    /// ### Arguments
+    /// 
+    /// * `name` - The name of the [`Route`].
+    /// * `namespace` - The namespace of the [`Route`].
+    /// * `hostname` - The host of the [`Route`].
+    /// 
+    /// ### Returns
+    /// 
+    /// A new [`Route`] instance.
+    /// 
+    /// ### Example
+    /// 
+    /// ```rust
+    /// let route = Route::new_default(&name, &namespace, &hostname);
+    /// println!("Created Route: {}", route); // Created Route: namespace:name
+    /// ```
+    pub fn new_test_route(name: &String, namespace: &String, hostname: &String) -> Self {
+        Route {
+            status: None,
+            metadata: ObjectMeta {
+                name: Some(name.clone()),
+                namespace: Some(namespace.clone()),
+                ..Default::default()
+            },
+            spec: RouteSpec {
+                host: Some(hostname.clone()),
+                path: None,
+                to: RouteTo {
+                    kind: RouteToKind::Service,
+                    name: "test".to_owned(),
+                    weight: None,
+                },
+                port: None,
+                tls: None,
+                wildcard_policy: None,
+                alternate_backends: None,
+                subdomain: None
+            },
+        }
+    }
+}
 
 /// Implement the [`fmt::Display`] trait for a [`Route`]. 
 /// It writes the data in [`resource_to_string()`] format.
