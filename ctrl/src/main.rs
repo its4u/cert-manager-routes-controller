@@ -41,21 +41,21 @@ async fn main() -> Result<(), kube::Error> {
         Api::<Certificate>::all(context.client.clone()),
         Default::default(),
         |obj| {
-            obj.annotations()
-                .get(CERT_ANNOTATION_KEY)
-                .unwrap_or(&String::from(""))
-                .split(",")
-                .map(|s| {
-                    let splitted = s.split_once(":");
-                    if splitted == None {
-                        eprintln!("Invalid annotation value: {}", s);
-                        ObjectRef::new("")
-                    } else {
-                        let (namespace, name) = splitted.unwrap();
-                        ObjectRef::new(name).within(namespace)
-                    }
-                })
-                .collect::<Vec<_>>()
+            match obj.annotations().get(CERT_ANNOTATION_KEY) {
+                Some(annotation) => annotation.split(",")
+                    .map(|s| {
+                        let splitted = s.split_once(":");
+                        if splitted == None {
+                            eprintln!("Invalid annotation value: {}", s);
+                            ObjectRef::new("")
+                        } else {
+                            let (namespace, name) = splitted.unwrap();
+                            ObjectRef::new(name).within(namespace)
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+                None => vec![],
+            }
         },
     )
     .run(reconcile, error_policy, context)
