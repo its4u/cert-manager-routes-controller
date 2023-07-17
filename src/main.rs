@@ -25,8 +25,6 @@ pub const DEFAULT_CERT_MANAGER_NAMESPACE: &'static str = "cert-manager";
 pub const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
 pub const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
 pub const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
-const FORCE_RECONCILE_ROUTE_NAME: &'static str = "console";
-const FORCE_RECONCILE_ROUTE_NAMESPACE: &'static str = "openshift-console";
 
 /// The main function initializes the controller and runs it in a multi-threaded context.
 ///
@@ -49,24 +47,17 @@ async fn main() -> Result<(), kube::Error> {
         Api::<Certificate>::all(context.client.clone()),
         Default::default(),
         |obj| match obj.annotations().get(CERT_ANNOTATION_KEY) {
-            Some(annotation) => {
-                let mut annotation = annotation.clone();
-                annotation.push(',');
-                annotation
+            Some(annotation) => annotation
                 .split(",")
                 .map(|s| {
-                    let splitted = s.split_once(":");
-                    if splitted == None {
-                        eprintln!("Invalid annotation value: {}", s);
-                        ObjectRef::new(FORCE_RECONCILE_ROUTE_NAME).within(FORCE_RECONCILE_ROUTE_NAMESPACE)
-                    } else {
-                        let (namespace, name) = splitted.unwrap();
+                    if let Some((namespace, name)) = s.split_once(":") {
                         ObjectRef::new(name).within(namespace)
+                    } else {
+                        ObjectRef::new("")
                     }
                 })
-                .collect::<Vec<_>>()
-            },
-            None => vec![ObjectRef::new(FORCE_RECONCILE_ROUTE_NAME).within(FORCE_RECONCILE_ROUTE_NAMESPACE)],
+                .collect::<Vec<_>>(),
+            None => vec![],
         },
     )
     .run(reconcile, error_policy, context)
@@ -84,7 +75,6 @@ async fn main() -> Result<(), kube::Error> {
 ///
 /// This function is idempotent.
 async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {
-    println!("Reconciling Route `{}`", &route.name_any());
     if is_valid_route(&route) {
         let hostname = route.spec.host.as_ref().unwrap();
         let cert_name = format_cert_name(&hostname);
@@ -122,30 +112,29 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
     }
 
     for route in Api::<Route>::all(ctx.client.clone()).list(&ListParams::default()).await.unwrap() {
-        if !is_valid_route(&route){ 
-            continue;
-        }
-        let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
-        match is_cert_annotated(&cert_name, &route, &ctx).await {
-            Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx).await {
-                Ok(certificate) => println!(
-                    "Annotated Certificate `{}` for Route `{}`",
-                    &certificate, &route
-                ),
-                Err(e) => {
-                    eprintln!(
-                        "Error annotating Certificate `{}:{}` requested by Route `{}`: {}",
-                        &ctx.cert_manager_namespace, &cert_name, &route, e
-                    );
-                    return Ok(Action::requeue(Duration::from_secs(
-                        REQUEUE_ERROR_DURATION_SLOW,
-                    )));
-                }
-            },
-            _ => {}
+        if is_valid_route(&route){
+            let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
+            match is_cert_annotated(&cert_name, &route, &ctx).await {
+                Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx).await {
+                    Ok(certificate) => println!(
+                        "Annotated Certificate `{}` for Route `{}`",
+                        &certificate, &route
+                    ),
+                    Err(e) => {
+                        eprintln!(
+                            "Error annotating Certificate `{}:{}` requested by Route `{}`: {}",
+                            &ctx.cert_manager_namespace, &cert_name, &route, e
+                        );
+                        return Ok(Action::requeue(Duration::from_secs(
+                            REQUEUE_ERROR_DURATION_SLOW,
+                        )));
+                    }
+                },
+                _ => {}
+            }
         }
     }
-
+    
     Ok(Action::requeue(Duration::from_secs(
         REQUEUE_DEFAULT_INTERVAL,
     )))
