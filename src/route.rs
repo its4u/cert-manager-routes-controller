@@ -17,6 +17,7 @@ pub const TLS_CRT: &'static str = "tls.crt";
 pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
 const ROUTE_UPDATE_ANNOTATION_KEY: &'static str = "cert-manager.io/updates";
+const FINALIZER: &'static str = "kubernetes";
 
 impl Route {
     /// Create a new test [`Route`] with some default values.
@@ -193,6 +194,7 @@ pub async fn populate_route_tls(
             "annotations": {
                 ROUTE_UPDATE_ANNOTATION_KEY: format_route_update_annotation(route.annotations().get(ROUTE_UPDATE_ANNOTATION_KEY))
             },
+            "finalizers": [FINALIZER],
         },
         "spec": {
             "tls": {
@@ -261,4 +263,43 @@ pub async fn is_tls_up_to_date(
     } else {
         Ok(false)
     }
+}
+
+/// Remove the finalizers from a [`Route`].
+/// 
+/// ### Arguments
+/// 
+/// * `route` - The [`Route`] to remove the finalizers from.
+/// * `ctx` - The [`ContextData`].
+/// 
+/// ### Returns
+/// 
+/// A [`Result`] containing `()` or a [`kube::Error`].
+/// 
+/// ### Example
+/// 
+/// ```rust
+/// match remove_finalizer(&route, &ctx).await {
+///    Ok(_) => println!("Finalizers removed from Route"),
+///   Err(e) => eprintln!("Error removing finalizers from Route: {}", e),
+/// }
+/// ```
+pub async fn remove_finalizer(
+    route: &Route,
+    ctx: &ContextData,
+) -> Result<(), kube::Error> {
+    let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
+    let patch = serde_json::json!({
+        "metadata":{
+            "finalizers": null,
+        }
+    });
+    let _ = routes
+        .patch(
+            &route.name_any(),
+            &PatchParams::default(),
+            &Patch::Merge(&patch),
+        )
+        .await?;
+    Ok(())
 }
