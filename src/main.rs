@@ -13,7 +13,7 @@ use kube::{
     runtime::reflector::ObjectRef,
     Api, Client, ResourceExt
 };
-use route::{is_tls_up_to_date, is_valid_route, populate_route_tls, remove_finalizer};
+use route::{is_tls_up_to_date, is_valid_route, populate_route_tls, remove_finalizer, add_finalizer};
 use std::{sync::Arc, time::Duration};
 use tools::format_cert_name;
 use types::*;
@@ -25,6 +25,7 @@ pub const DEFAULT_CERT_MANAGER_NAMESPACE: &'static str = "cert-manager";
 pub const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
 pub const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
 pub const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
+pub const FINALIZER: &'static str = "kubernetes";
 
 /// The main function initializes the controller and runs it in a multi-threaded context.
 ///
@@ -143,6 +144,18 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
                 }
             },
             _ => {}
+        }
+
+        if !route.finalizers().contains(&FINALIZER.to_string()) {
+            match add_finalizer(&route, &ctx).await {
+                Ok(_) => println!("Added finalizer to Route `{}`", &route),
+                Err(e) => {
+                    eprintln!("Error adding finalizer to Route `{}`: {}", &route, e);
+                    return Ok(Action::requeue(Duration::from_secs(
+                        REQUEUE_ERROR_DURATION_SLOW,
+                    )));
+                }
+            }
         }
     }
 

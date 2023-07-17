@@ -1,7 +1,7 @@
 use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
 use crate::tools::{format_route_update_annotation, get_secret_tls_data, resource_to_string};
 use crate::types::ContextData;
-use crate::ISSUER_ANNOTATION_KEY;
+use crate::{ISSUER_ANNOTATION_KEY, FINALIZER};
 use kube::api::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},
@@ -17,7 +17,6 @@ pub const TLS_CRT: &'static str = "tls.crt";
 pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
 const ROUTE_UPDATE_ANNOTATION_KEY: &'static str = "cert-manager.io/updates";
-const FINALIZER: &'static str = "kubernetes";
 
 impl Route {
     /// Create a new test [`Route`] with some default values.
@@ -194,7 +193,6 @@ pub async fn populate_route_tls(
             "annotations": {
                 ROUTE_UPDATE_ANNOTATION_KEY: format_route_update_annotation(route.annotations().get(ROUTE_UPDATE_ANNOTATION_KEY))
             },
-            "finalizers": [FINALIZER],
         },
         "spec": {
             "tls": {
@@ -263,6 +261,45 @@ pub async fn is_tls_up_to_date(
     } else {
         Ok(false)
     }
+}
+
+/// Add the [`FINALIZER`] to a [`Route`].
+/// 
+/// ### Arguments
+/// 
+/// * `route` - The [`Route`] to add the finalizer to.
+/// * `ctx` - The [`ContextData`].
+/// 
+/// ### Returns
+/// 
+/// A [`Result`] containing `()` or a [`kube::Error`].
+/// 
+/// ### Example
+/// 
+/// ```rust
+/// match add_finalizer(&route, &ctx).await {
+///    Ok(_) => println!("Finalizer added to Route"),
+///   Err(e) => eprintln!("Error adding finalizer to Route: {}", e),
+/// }
+/// ```
+pub async fn add_finalizer(
+    route: &Route,
+    ctx: &ContextData,
+) -> Result<(), kube::Error> {
+    let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
+    let patch = serde_json::json!({
+        "metadata":{
+            "finalizers": [FINALIZER],
+        }
+    });
+    let _ = routes
+        .patch(
+            &route.name_any(),
+            &PatchParams::default(),
+            &Patch::Merge(&patch),
+        )
+        .await?;
+    Ok(())
 }
 
 /// Remove the finalizers from a [`Route`].
