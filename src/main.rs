@@ -11,9 +11,9 @@ use kube::{
     api::ListParams,
     runtime::controller::{Action, Controller},
     runtime::reflector::ObjectRef,
-    Api, Client, ResourceExt, core::Object,
+    Api, Client, ResourceExt
 };
-use route::{is_tls_up_to_date, is_valid_route, populate_route_tls};
+use route::{is_tls_up_to_date, is_valid_route, populate_route_tls, remove_finalizer};
 use std::{sync::Arc, time::Duration};
 use tools::format_cert_name;
 use types::*;
@@ -68,14 +68,49 @@ async fn main() -> Result<(), kube::Error> {
 
 /// The reconcile function is called for each [`Route`] event and related [`Certificate`] events by the main controller.
 ///
-/// It checks if the [`Route`] is valid,
+/// If the [`Route`] is being finalized or doesn't have the [`ISSUER_ANNOTATION_KEY`] annotation,
+/// the route will be removed from the [`Certificate`] annotation if it exists.
+/// 
+/// Else, it checks if the [`Route`] is valid,
 /// if a [`Certificate`] exists for the [`Route`]'s hostname,
 /// if the [`Certificate`] is annotated with the [`Route`]'s name and namespace
 /// and if the [`Route`]'s TLS is up to date.
 ///
 /// This function is idempotent.
 async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {
-    if is_valid_route(&route) {
+    let mut remove_annotation: bool = false;
+    if route.metadata.deletion_timestamp.is_some() && route.metadata.finalizers.as_ref().is_some() {
+        remove_annotation = true;
+        match remove_finalizer(&route, &ctx).await {
+            Ok(_) => println!("Removed finalizer from Route `{}`", &route),
+            Err(e) => {
+                eprintln!("Error removing finalizer from Route `{}`: {}", &route, e);
+                return Ok(Action::requeue(Duration::from_secs(
+                    REQUEUE_ERROR_DURATION_SLOW,
+                )));
+            }
+        }
+    }
+    if (remove_annotation || route.annotations().get(ISSUER_ANNOTATION_KEY).is_none()) && route.spec.host.as_ref().is_some(){
+        let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
+        if certificate_exists(&cert_name, &ctx).await {
+            match annotate_cert(&cert_name, &route, &ctx, false).await {
+                Ok(certificate) => println!(
+                    "Removed  Route `{}` from Certificate `{}` annotation",
+                    &route, &certificate
+                ),
+                Err(e) => {
+                    eprintln!(
+                        "Error removing Route `{}` from Certificate `{}:{}` annotation: {}",
+                        &ctx.cert_manager_namespace, &cert_name, &route, e
+                    );
+                    return Ok(Action::requeue(Duration::from_secs(
+                        REQUEUE_ERROR_DURATION_SLOW,
+                    )));
+                }
+            }
+        }
+    } else if is_valid_route(&route) {
         let hostname = route.spec.host.as_ref().unwrap();
         let cert_name = format_cert_name(&hostname);
 
@@ -111,11 +146,12 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
         }
     }
 
+    // Ensure that each managed certificate is correclty annotated
     for route in Api::<Route>::all(ctx.client.clone()).list(&ListParams::default()).await.unwrap() {
         if is_valid_route(&route){
             let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
             match is_cert_annotated(&cert_name, &route, &ctx).await {
-                Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx).await {
+                Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx, true).await {
                     Ok(certificate) => println!(
                         "Annotated Certificate `{}` for Route `{}`",
                         &certificate, &route
@@ -134,7 +170,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
             }
         }
     }
-    
+
     Ok(Action::requeue(Duration::from_secs(
         REQUEUE_DEFAULT_INTERVAL,
     )))
