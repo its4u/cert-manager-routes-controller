@@ -116,6 +116,7 @@ pub async fn annotate_cert(
     cert_name: &String,
     route: &Route,
     ctx: &ContextData,
+    add: bool,
 ) -> Result<Certificate, kube::Error> {
     let mut annotations =
         Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
@@ -124,7 +125,7 @@ pub async fn annotate_cert(
             .metadata
             .annotations
             .unwrap_or_default();
-    let annotation = format_cert_annotation(annotations.get(CERT_ANNOTATION_KEY), &route);
+    let annotation = format_cert_annotation(annotations.get(CERT_ANNOTATION_KEY), &route, add);
     let _ = annotations.insert(CERT_ANNOTATION_KEY.to_owned(), annotation);
     let cert = Api::<Certificate>::namespaced(ctx.client.clone(), &ctx.cert_manager_namespace)
         .patch(

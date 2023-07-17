@@ -1,7 +1,7 @@
 use crate::crd::{certificate::Certificate, route::Route};
 use crate::route::{TLS_CRT, TLS_KEY};
 use crate::types::ContextData;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::ByteString;
 use kube::Api;
@@ -55,18 +55,23 @@ fn test_resource_to_string() {
 /// let annotation = format_cert_annotation(None, &route);
 /// println!("{}", annotation);
 /// ```
-pub fn format_cert_annotation(cert_annotation: Option<&String>, route: &Route) -> String {
+pub fn format_cert_annotation(cert_annotation: Option<&String>, route: &Route, add: bool) -> String {
     match cert_annotation {
-        Some(cert_annotation) if cert_annotation.is_empty() => route.to_string(),
-        None => route.to_string(),
+        Some(cert_annotation) if cert_annotation.is_empty() && add => route.to_string(),
+        None if add => route.to_string(),
         Some(cert_annotation) => {
             let mut annotations: HashSet<String> = HashSet::new();
             cert_annotation.split(",").for_each(|annotation| {
                 annotations.insert(annotation.to_owned());
             });
-            annotations.insert(route.to_string());
+            if add {
+                annotations.insert(route.to_string());
+            } else {
+                annotations.remove(&route.to_string());
+            }
             annotations.into_iter().collect::<Vec<String>>().join(",")
         }
+        _ => String::new(),
     }
 }
 
@@ -79,18 +84,31 @@ fn test_format_cert_annotation() {
         None,
         None,
     );
-    assert_eq!(format_cert_annotation(None, &route), "hello:world");
+    assert_eq!(format_cert_annotation(None, &route, true), "hello:world");
     assert_eq!(
-        format_cert_annotation(Some(&"".to_owned()), &route),
+        format_cert_annotation(Some(&"".to_owned()), &route, true),
         "hello:world"
     );
     assert_eq!(
-        format_cert_annotation(Some(&"foo:bar".to_owned()), &route),
+        format_cert_annotation(Some(&"foo:bar".to_owned()), &route, true),
         "foo:bar,hello:world"
     );
     assert_eq!(
-        format_cert_annotation(Some(&"foo:bar,alice:bob".to_owned()), &route),
+        format_cert_annotation(Some(&"foo:bar,alice:bob".to_owned()), &route, true),
         "foo:bar,alice:bob,hello:world"
+    );
+    assert_eq!(format_cert_annotation(None, &route, false), "");
+    assert_eq!(
+        format_cert_annotation(Some(&"".to_owned()), &route, false),
+        ""
+    );
+    assert_eq!(
+        format_cert_annotation(Some(&"foo:bar".to_owned()), &route, false),
+        "foo:bar"
+    );
+    assert_eq!(
+        format_cert_annotation(Some(&"foo:bar,hello:world".to_owned()), &route, false),
+        "foo:bar"
     );
 }
 
