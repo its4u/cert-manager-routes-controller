@@ -1,7 +1,8 @@
+use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
+use crate::tools::{format_route_update_annotation, get_secret_tls_data, resource_to_string};
 use crate::types::ContextData;
 use crate::ISSUER_ANNOTATION_KEY;
-use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
-use crate::tools::{get_secret_tls_data, resource_to_string};
+use kube::api::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},
     Api, ResourceExt,
@@ -9,36 +10,42 @@ use kube::{
 use serde_json;
 use std::collections::BTreeMap;
 use std::fmt;
-use kube::api::ObjectMeta;
 
 const TERMINATION: &'static str = "edge";
 const REDIRECT_POLICY: &'static str = "Redirect";
 pub const TLS_CRT: &'static str = "tls.crt";
 pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
+const ROUTE_UPDATE_ANNOTATION_KEY: &'static str = "cert-manager.io/updates";
 
 impl Route {
     /// Create a new test [`Route`] with some default values.
-    /// 
+    ///
     /// Implemented for testing purposes.
-    /// 
+    ///
     /// ### Arguments
-    /// 
+    ///
     /// * `name` - The name of the [`Route`].
     /// * `namespace` - The namespace of the [`Route`].
     /// * `hostname` - The host of the [`Route`].
-    /// 
+    ///
     /// ### Returns
-    /// 
+    ///
     /// A new [`Route`] instance.
-    /// 
+    ///
     /// ### Example
-    /// 
+    ///
     /// ```rust
     /// let route = Route::new_default(&name, &namespace, &hostname);
     /// println!("Created Route: {}", route); // Created Route: namespace:name
     /// ```
-    pub fn new_test_route(name: &String, namespace: &String, hostname: &String, cert_manager_issuer: Option<&String>, annotation_key: Option<&String>) -> Self {
+    pub fn new_test_route(
+        name: &String,
+        namespace: &String,
+        hostname: &String,
+        cert_manager_issuer: Option<&String>,
+        annotation_key: Option<&String>,
+    ) -> Self {
         Route {
             status: None,
             metadata: ObjectMeta {
@@ -49,7 +56,7 @@ impl Route {
                         let mut annotations = BTreeMap::new();
                         let _ = annotations.insert(annotation_key.unwrap().clone(), issuer.clone());
                         Some(annotations)
-                    },
+                    }
                     None => None,
                 },
                 ..Default::default()
@@ -66,34 +73,38 @@ impl Route {
                 tls: None,
                 wildcard_policy: None,
                 alternate_backends: None,
-                subdomain: None
+                subdomain: None,
             },
         }
     }
 }
 
-/// Implement the [`fmt::Display`] trait for a [`Route`]. 
+/// Implement the [`fmt::Display`] trait for a [`Route`].
 /// It writes the data in [`resource_to_string()`] format.
 impl fmt::Display for Route {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", resource_to_string(&self.name_any(), &self.namespace().unwrap()))
+        write!(
+            f,
+            "{}",
+            resource_to_string(&self.name_any(), &self.namespace().unwrap())
+        )
     }
 }
 
 /// Check whether a [`Route`] is should be handled by the controller.
-/// 
+///
 /// A [`Route`] is valid if it has a [`spec.host`] and an [`ISSUER_ANNOTATION_KEY`] annotation.
-/// 
+///
 /// ### Arguments
-/// 
+///
 /// * `route` - The [`Route`] to check.
-/// 
+///
 /// ### Returns
-/// 
+///
 /// A [`bool`] indicating whether the [`Route`] is valid.
-/// 
+///
 /// ### Example
-/// 
+///
 /// ```rust
 /// let valid = is_valid_route(&route).await?;
 /// println!("Valid Route: {}", valid);
@@ -117,29 +128,47 @@ pub fn is_valid_route(route: &Route) -> bool {
 
 #[test]
 fn test_is_valid_route() {
-    let route = Route::new_test_route(&"test_name".to_owned(), &"test_ns".to_owned(), &"test_host".to_owned(), None, None);
+    let route = Route::new_test_route(
+        &"test_name".to_owned(),
+        &"test_ns".to_owned(),
+        &"test_host".to_owned(),
+        None,
+        None,
+    );
     assert_eq!(is_valid_route(&route), false);
-    let route = Route::new_test_route(&"test".to_owned(), &"test".to_owned(), &"test".to_owned(), Some(&"test".to_owned()), Some(&"foo".to_owned()));
+    let route = Route::new_test_route(
+        &"test".to_owned(),
+        &"test".to_owned(),
+        &"test".to_owned(),
+        Some(&"test".to_owned()),
+        Some(&"foo".to_owned()),
+    );
     assert_eq!(is_valid_route(&route), false);
 
-    let route = Route::new_test_route(&"test".to_owned(), &"test".to_owned(), &"test".to_owned(), Some(&"test".to_owned()), Some(&ISSUER_ANNOTATION_KEY.to_owned()));
+    let route = Route::new_test_route(
+        &"test".to_owned(),
+        &"test".to_owned(),
+        &"test".to_owned(),
+        Some(&"test".to_owned()),
+        Some(&ISSUER_ANNOTATION_KEY.to_owned()),
+    );
     assert_eq!(is_valid_route(&route), true);
 }
 
 /// Populate the TLS section of a [`Route`] with the data from a [`Certificate`].
-/// 
+///
 /// ### Arguments
-/// 
+///
 /// * `route` - The [`Route`] to populate.
 /// * `cert_name` - The name of the [`Certificate`] to use.
 /// * `ctx` - The [`ContextData`].
-/// 
+///
 /// ### Returns
-/// 
+///
 /// A [`Result`] containing `()` or a [`kube::Error`].
-/// 
+///
 /// ### Example
-/// 
+///
 /// ```rust
 /// match populate_route_tls(&route, &cert_name, &ctx).await {
 ///     Ok(_) => println!("Route TLS populated"),
@@ -160,6 +189,11 @@ pub async fn populate_route_tls(
     };
     let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
     let patch = serde_json::json!({
+        "metadata":{
+            "annotations": {
+                ROUTE_UPDATE_ANNOTATION_KEY: format_route_update_annotation(route.annotations().get(ROUTE_UPDATE_ANNOTATION_KEY))
+            },
+        },
         "spec": {
             "tls": {
                 "termination": TERMINATION,
@@ -181,19 +215,19 @@ pub async fn populate_route_tls(
 }
 
 /// Check whether a [`Route`]'s TLS is up to date the latest related [`Certificate`].
-/// 
+///
 /// ### Arguments
-/// 
+///
 /// * `route` - The [`Route`] to check.
 /// * `cert_name` - The name of the [`Certificate`] to use.
 /// * `ctx` - The [`ContextData`].
-/// 
+///
 /// ### Returns
-/// 
+///
 /// A [`Result`] containing a [`bool`] indicating whether the [`Route`]'s TLS is up to date or a [`kube::Error`].
-/// 
+///
 /// ### Example
-/// 
+///
 /// ```rust
 /// let up_to_date = is_tls_up_to_date(&route, &cert_name, &ctx).await?;
 /// println!("TLS up to date: {}", up_to_date);
