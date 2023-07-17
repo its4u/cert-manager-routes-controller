@@ -8,9 +8,10 @@ use certificate::{annotate_cert, certificate_exists, create_certificate, is_cert
 use crd::{certificate::Certificate, route::Route};
 use futures::StreamExt;
 use kube::{
+    api::ListParams,
     runtime::controller::{Action, Controller},
     runtime::reflector::ObjectRef,
-    Api, Client, ResourceExt,
+    Api, Client, ResourceExt, core::Object,
 };
 use route::{is_tls_up_to_date, is_valid_route, populate_route_tls};
 use std::{sync::Arc, time::Duration};
@@ -24,9 +25,11 @@ pub const DEFAULT_CERT_MANAGER_NAMESPACE: &'static str = "cert-manager";
 pub const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
 pub const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
 pub const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
+const FORCE_RECONCILE_ROUTE_NAME: &'static str = "console";
+const FORCE_RECONCILE_ROUTE_NAMESPACE: &'static str = "openshift-console";
 
 /// The main function initializes the controller and runs it in a multi-threaded context.
-/// 
+///
 /// The controller watches for [`Route`] and matching [`Certificate`] events.
 #[tokio::main]
 async fn main() -> Result<(), kube::Error> {
@@ -45,22 +48,25 @@ async fn main() -> Result<(), kube::Error> {
     .watches(
         Api::<Certificate>::all(context.client.clone()),
         Default::default(),
-        |obj| {
-            match obj.annotations().get(CERT_ANNOTATION_KEY) {
-                Some(annotation) => annotation.split(",")
-                    .map(|s| {
-                        let splitted = s.split_once(":");
-                        if splitted == None {
-                            eprintln!("Invalid annotation value: {}", s);
-                            ObjectRef::new("")
-                        } else {
-                            let (namespace, name) = splitted.unwrap();
-                            ObjectRef::new(name).within(namespace)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-                None => vec![],
-            }
+        |obj| match obj.annotations().get(CERT_ANNOTATION_KEY) {
+            Some(annotation) => {
+                let mut annotation = annotation.clone();
+                annotation.push(',');
+                annotation
+                .split(",")
+                .map(|s| {
+                    let splitted = s.split_once(":");
+                    if splitted == None {
+                        eprintln!("Invalid annotation value: {}", s);
+                        ObjectRef::new(FORCE_RECONCILE_ROUTE_NAME).within(FORCE_RECONCILE_ROUTE_NAMESPACE)
+                    } else {
+                        let (namespace, name) = splitted.unwrap();
+                        ObjectRef::new(name).within(namespace)
+                    }
+                })
+                .collect::<Vec<_>>()
+            },
+            None => vec![ObjectRef::new(FORCE_RECONCILE_ROUTE_NAME).within(FORCE_RECONCILE_ROUTE_NAMESPACE)],
         },
     )
     .run(reconcile, error_policy, context)
@@ -70,14 +76,15 @@ async fn main() -> Result<(), kube::Error> {
 }
 
 /// The reconcile function is called for each [`Route`] event and related [`Certificate`] events by the main controller.
-/// 
-/// It checks if the [`Route`] is valid, 
-/// if a [`Certificate`] exists for the [`Route`]'s hostname, 
-/// if the [`Certificate`] is annotated with the [`Route`]'s name and namespace 
+///
+/// It checks if the [`Route`] is valid,
+/// if a [`Certificate`] exists for the [`Route`]'s hostname,
+/// if the [`Certificate`] is annotated with the [`Route`]'s name and namespace
 /// and if the [`Route`]'s TLS is up to date.
-/// 
+///
 /// This function is idempotent.
-async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {    
+async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {
+    println!("Reconciling Route `{}`", &route.name_any());
     if is_valid_route(&route) {
         let hostname = route.spec.host.as_ref().unwrap();
         let cert_name = format_cert_name(&hostname);
@@ -100,6 +107,25 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
             }
         }
 
+        match is_tls_up_to_date(&route, &cert_name, &ctx).await {
+            Ok(false) | Err(_) => match populate_route_tls(&route, &cert_name, &ctx).await {
+                Ok(_) => println!("Populated TLS for Route `{}`", &route),
+                Err(e) => {
+                    eprintln!("Error populating TLS for Route `{}`: {}", &route, e);
+                    return Ok(Action::requeue(Duration::from_secs(
+                        REQUEUE_ERROR_DURATION_SLOW,
+                    )));
+                }
+            },
+            _ => {}
+        }
+    }
+
+    for route in Api::<Route>::all(ctx.client.clone()).list(&ListParams::default()).await.unwrap() {
+        if !is_valid_route(&route){ 
+            continue;
+        }
+        let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
         match is_cert_annotated(&cert_name, &route, &ctx).await {
             Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx).await {
                 Ok(certificate) => println!(
@@ -118,25 +144,6 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
             },
             _ => {}
         }
-
-        match is_tls_up_to_date(&route, &cert_name, &ctx).await {
-            Ok(false) | Err(_) => match populate_route_tls(&route, &cert_name, &ctx).await {
-                Ok(_) => println!(
-                    "Populated TLS for Route `{}`",
-                    &route
-                ),
-                Err(e) => {
-                    eprintln!(
-                        "Error populating TLS for Route `{}`: {}",
-                        &route, e
-                    );
-                    return Ok(Action::requeue(Duration::from_secs(
-                        REQUEUE_ERROR_DURATION_SLOW,
-                    )));
-                }
-            },
-            _ => {}
-        }
     }
 
     Ok(Action::requeue(Duration::from_secs(
@@ -146,10 +153,6 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
 
 /// The error policy function is called by the controller when an unexpected error occurs during the reconcile function.
 fn error_policy(route: Arc<Route>, err: &Error, _ctx: Arc<ContextData>) -> Action {
-    eprintln!(
-        "Error reconciling Route `{}`: {}",
-        &route,
-        err
-    );
+    eprintln!("Error reconciling Route `{}`: {}", &route, err);
     Action::requeue(Duration::from_secs(REQUEUE_ERROR_DURATION_FAST))
 }
