@@ -23,16 +23,16 @@ use std::collections::HashSet;
 ///
 /// ```rust
 /// let resource = resource_to_string("world", "hello");
-/// println!("{}", resource); // hello:world
+/// println!("{}", resource); // hello/world
 /// ```
 pub fn resource_to_string(name: &str, namespace: &str) -> String {
-    format!("{}:{}", namespace, name)
+    format!("{}/{}", namespace, name)
 }
 
 #[test]
 fn test_resource_to_string() {
-    assert_eq!(resource_to_string("name", "namespace"), "namespace:name");
-    assert_ne!(resource_to_string("name", "namespace"), "name:namespace");
+    assert_eq!(resource_to_string("name", "namespace"), "namespace/name");
+    assert_ne!(resource_to_string("name", "namespace"), "name/namespace");
 }
 
 /// Format a [`Certificate`] annotation value in the format `namespace:name(,namespace:name)*`.
@@ -84,18 +84,18 @@ fn test_format_cert_annotation() {
         None,
         None,
     );
-    assert_eq!(format_cert_annotation(None, &route, true), "hello:world");
+    assert_eq!(format_cert_annotation(None, &route, true), "hello/world");
     assert_eq!(
         format_cert_annotation(Some(&"".to_owned()), &route, true),
-        "hello:world"
+        "hello/world"
     );
     assert_eq!(
-        format_cert_annotation(Some(&"foo:bar".to_owned()), &route, true),
-        "foo:bar,hello:world"
+        format_cert_annotation(Some(&"foo/bar".to_owned()), &route, true),
+        "foo/bar,hello/world"
     );
     assert_eq!(
-        format_cert_annotation(Some(&"foo:bar,alice:bob".to_owned()), &route, true),
-        "foo:bar,alice:bob,hello:world"
+        format_cert_annotation(Some(&"foo/bar,alice/bob".to_owned()), &route, true),
+        "foo/bar,alice/bob,hello/world"
     );
     assert_eq!(format_cert_annotation(None, &route, false), "");
     assert_eq!(
@@ -103,12 +103,12 @@ fn test_format_cert_annotation() {
         ""
     );
     assert_eq!(
-        format_cert_annotation(Some(&"foo:bar".to_owned()), &route, false),
-        "foo:bar"
+        format_cert_annotation(Some(&"foo/bar".to_owned()), &route, false),
+        "foo/bar"
     );
     assert_eq!(
-        format_cert_annotation(Some(&"foo:bar,hello:world".to_owned()), &route, false),
-        "foo:bar"
+        format_cert_annotation(Some(&"foo/bar,hello/world".to_owned()), &route, false),
+        "foo/bar"
     );
 }
 

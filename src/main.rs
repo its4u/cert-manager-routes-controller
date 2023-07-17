@@ -51,7 +51,7 @@ async fn main() -> Result<(), kube::Error> {
             Some(annotation) => annotation
                 .split(",")
                 .map(|s| {
-                    if let Some((namespace, name)) = s.split_once(":") {
+                    if let Some((namespace, name)) = s.split_once("/") {
                         ObjectRef::new(name).within(namespace)
                     } else {
                         ObjectRef::new("")
@@ -80,6 +80,7 @@ async fn main() -> Result<(), kube::Error> {
 /// This function is idempotent.
 async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, Error> {
     let mut remove_annotation: bool = false;
+
     if route.metadata.deletion_timestamp.is_some() && route.metadata.finalizers.as_ref().is_some() {
         remove_annotation = true;
         match remove_finalizer(&route, &ctx).await {
@@ -92,6 +93,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
             }
         }
     }
+
     if (remove_annotation || route.annotations().get(ISSUER_ANNOTATION_KEY).is_none()) && route.spec.host.as_ref().is_some(){
         let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
         if certificate_exists(&cert_name, &ctx).await && is_cert_annotated(&cert_name, &route, &ctx).await.unwrap_or(true) {
@@ -102,7 +104,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
                 ),
                 Err(e) => {
                     eprintln!(
-                        "Error removing Route `{}` from Certificate `{}:{}` annotation: {}",
+                        "Error removing Route `{}` from Certificate `{}/{}` annotation: {}",
                         &ctx.cert_manager_namespace, &cert_name, &route, e
                     );
                     return Ok(Action::requeue(Duration::from_secs(
@@ -123,7 +125,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
                 ),
                 Err(e) => {
                     eprintln!(
-                        "Error creating Certificate `{}:{}` requested by Route `{}`: {}",
+                        "Error creating Certificate `{}/{}` requested by Route `{}`: {}",
                         &ctx.cert_manager_namespace, &cert_name, &route, e
                     );
                     return Ok(Action::requeue(Duration::from_secs(
@@ -171,7 +173,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
                     ),
                     Err(e) => {
                         eprintln!(
-                            "Error annotating Certificate `{}:{}` requested by Route `{}`: {}",
+                            "Error annotating Certificate `{}/{}` requested by Route `{}`: {}",
                             &ctx.cert_manager_namespace, &cert_name, &route, e
                         );
                         return Ok(Action::requeue(Duration::from_secs(
