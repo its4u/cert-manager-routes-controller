@@ -93,7 +93,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
     }
     if (remove_annotation || route.annotations().get(ISSUER_ANNOTATION_KEY).is_none()) && route.spec.host.as_ref().is_some(){
         let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
-        if certificate_exists(&cert_name, &ctx).await {
+        if certificate_exists(&cert_name, &ctx).await && is_cert_annotated(&cert_name, &route, &ctx).await.unwrap_or(true) {
             match annotate_cert(&cert_name, &route, &ctx, false).await {
                 Ok(certificate) => println!(
                     "Removed  Route `{}` from Certificate `{}` annotation",
