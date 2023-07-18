@@ -1,7 +1,7 @@
 use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
 use crate::tools::{format_route_update_annotation, get_secret_tls_data, resource_to_string};
 use crate::types::ContextData;
-use crate::{ISSUER_ANNOTATION_KEY, FINALIZER};
+use crate::{FINALIZER, ISSUER_ANNOTATION_KEY};
 use kube::api::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},
@@ -264,28 +264,25 @@ pub async fn is_tls_up_to_date(
 }
 
 /// Add the [`FINALIZER`] to a [`Route`].
-/// 
+///
 /// ### Arguments
-/// 
+///
 /// * `route` - The [`Route`] to add the finalizer to.
 /// * `ctx` - The [`ContextData`].
-/// 
+///
 /// ### Returns
-/// 
+///
 /// A [`Result`] containing `()` or a [`kube::Error`].
-/// 
+///
 /// ### Example
-/// 
+///
 /// ```rust
 /// match add_finalizer(&route, &ctx).await {
 ///    Ok(_) => println!("Finalizer added to Route"),
 ///   Err(e) => eprintln!("Error adding finalizer to Route: {}", e),
 /// }
 /// ```
-pub async fn add_finalizer(
-    route: &Route,
-    ctx: &ContextData,
-) -> Result<(), kube::Error> {
+pub async fn add_finalizer(route: &Route, ctx: &ContextData) -> Result<(), kube::Error> {
     let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
     let patch = serde_json::json!({
         "metadata":{
@@ -303,28 +300,25 @@ pub async fn add_finalizer(
 }
 
 /// Remove the finalizers from a [`Route`].
-/// 
+///
 /// ### Arguments
-/// 
+///
 /// * `route` - The [`Route`] to remove the finalizers from.
 /// * `ctx` - The [`ContextData`].
-/// 
+///
 /// ### Returns
-/// 
+///
 /// A [`Result`] containing `()` or a [`kube::Error`].
-/// 
+///
 /// ### Example
-/// 
+///
 /// ```rust
 /// match remove_finalizer(&route, &ctx).await {
 ///    Ok(_) => println!("Finalizers removed from Route"),
 ///   Err(e) => eprintln!("Error removing finalizers from Route: {}", e),
 /// }
 /// ```
-pub async fn remove_finalizer(
-    route: &Route,
-    ctx: &ContextData,
-) -> Result<(), kube::Error> {
+pub async fn remove_finalizer(route: &Route, ctx: &ContextData) -> Result<(), kube::Error> {
     let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
     let patch = serde_json::json!({
         "metadata":{

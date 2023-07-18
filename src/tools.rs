@@ -55,7 +55,11 @@ fn test_resource_to_string() {
 /// let annotation = format_cert_annotation(None, &route);
 /// println!("{}", annotation);
 /// ```
-pub fn format_cert_annotation(cert_annotation: Option<&String>, route: &Route, add: bool) -> String {
+pub fn format_cert_annotation(
+    cert_annotation: Option<&String>,
+    route: &Route,
+    add: bool,
+) -> String {
     match cert_annotation {
         Some(cert_annotation) if cert_annotation.is_empty() && add => route.to_string(),
         None if add => route.to_string(),
