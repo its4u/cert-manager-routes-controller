@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  cert-manager-routes-controller:
+  - apiVersion: v2
+    appVersion: 0.9.9-beta.8
+    created: "2023-07-19T08:31:29.064796845+02:00"
+    description: The power of `cert-manger` unleashed for OpenShift routes
+    digest: ee86b036cb76964d539fc0f0cf1f2208b1b624a83a949469c0cd1df83fb1f5fd
+    name: cert-manager-routes-controller
+    type: application
+    urls:
+    - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-0.9.9-beta.8/cert-manager-routes-controller-0.9.9-beta.8.tgz
+    version: 0.9.9-beta.8
+generated: "2023-07-19T08:31:29.064824716+02:00"
