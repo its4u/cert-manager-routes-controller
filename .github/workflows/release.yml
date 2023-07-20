@@ -1,4 +1,4 @@
-name: Publish a new release
+  name: Publish a new release
 
 on:
   push:
@@ -26,6 +26,9 @@ jobs:
       run: |
         docker build . --file Dockerfile --tag cert-manager-routes-controller:${{  github.ref_name }}
         docker push ghcr.io/its4u/cert-manager-routes-controller:latest
+    
+    - name: Get tag message and assign it to `TAG_MESSAGE`
+      run: echo "TAG_MESSAGE=`git tag -l --format='%(contents:subject)' {{  github.ref_name }}`" >> $GITHUB_ENV
 
     - name: Create Release
       id: create_release
@@ -36,7 +39,10 @@ jobs:
         tag_name: ${{ github.ref }}
         release_name: Release ${{ github.ref }}
         body: |
-          Get the latest image at [ghcr.io/its4u/cert-manager-routes-controller:latest](ghcr.io/its4u/cert-manager-routes-controller:latest)!
+          ${{ env.TAG_MESSAGE }}
+          
+          **Get the latest image at [ghcr.io/its4u/cert-manager-routes-controller:latest](ghcr.io/its4u/cert-manager-routes-controller:latest)!**
+          
           *This release was automatically created by a workflow*
         draft: false
         prerelease: contains(github.ref_name, "beta")
