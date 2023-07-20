@@ -17,10 +17,10 @@ jobs:
     
     - name: Update version in Chart.yaml and in Cargo.toml
       run: |
-        sed -i "s/version: .*/version: \"${{ github.ref_name }}\"/g" charts/Chart.yaml
-        sed -i "s/appVersion: .*/version: \"${{ github.ref_name }}\"/g" chart/Chart.yaml
-        sed -i "0,/version = .*/s//version = \"{{ github.ref_name }}\"/" ctrl/Cargo.toml
-        git add charts/Chart.yaml chart/Chart.yaml ctrl/Cargo.toml
+        sed -i "s/version: .*/version: \"${{ github.ref_name }}\"/g" ./charts/Chart.yaml
+        sed -i "s/appVersion: .*/version: \"${{ github.ref_name }}\"/g" ./chart/Chart.yaml
+        sed -i "0,/version = .*/s//version = \"{{ github.ref_name }}\"/" ./ctrl/Cargo.toml
+        git add .
         git commit -m "Update version to ${{ github.ref_name }}"
         git push origin HEAD:${{ github.ref }}
     
