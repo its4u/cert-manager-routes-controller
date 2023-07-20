@@ -14,6 +14,18 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+    
+    - name: Update version in Chart.yaml and in Cargo.toml
+      run: |
+        sed -i "s/version: .*/version: \"${{ github.ref_name }}\"/g" charts/Chart.yaml
+        sed -i "s/appVersion: .*/version: \"${{ github.ref_name }}\"/g" chart/Chart.yaml
+        sed -i "0,/version = .*/s//version = \"{{ github.ref_name }}\"/" ctrl/Cargo.toml
+        git add charts/Chart.yaml chart/Chart.yaml ctrl/Cargo.toml
+        git commit -m "Update version to ${{ github.ref_name }}"
+        git push origin HEAD:${{ github.ref }}
+    
+    - name: Checkout code
+      uses: actions/checkout@v3
         
     - name: 'Login to GitHub Container Registry'
       uses: docker/login-action@v1
@@ -26,23 +38,16 @@ jobs:
       run: |
         docker build . --file Dockerfile --tag ghcr.io/its4u/cert-manager-routes-controller:${{  github.ref_name }}
         docker push ghcr.io/its4u/cert-manager-routes-controller:${{  github.ref_name }}
-    
-    - name: Get tag message and assign it to `TAG_MESSAGE`
-      run: echo "TAG_MESSAGE=`git tag -l --format='%(contents:subject)' ${{  github.ref_name }}`" >> $GITHUB_ENV
+ 
+    - name: Configure Git for Helm
+      run: |
+        git config user.name "$GITHUB_ACTOR"
+        git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+
+    - name: Run chart-releaser
+      uses: helm/chart-releaser-action@v1.6.0
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        body: |
-          ${{ env.TAG_MESSAGE }}
-          <br>
-          **Get the latest image at [ghcr.io/its4u/cert-manager-routes-controller:latest](https://ghcr.io/its4u/cert-manager-routes-controller:latest)!**
-          <br>
-          *This release was automatically created by a workflow*
-        draft: false
-        prerelease: ${{ contains(github.ref_name, 'beta') }}
+        CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
