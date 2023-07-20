@@ -28,7 +28,7 @@ jobs:
         docker push ghcr.io/its4u/cert-manager-routes-controller:${{  github.ref_name }}
     
     - name: Get tag message and assign it to `TAG_MESSAGE`
-      run: echo "TAG_MESSAGE=`git tag -l --format='%(contents:subject)' {{  github.ref_name }}`" >> $GITHUB_ENV
+      run: echo "TAG_MESSAGE=`git tag -l --format='%(contents:subject)' ${{  github.ref_name }}`" >> $GITHUB_ENV
 
     - name: Create Release
       id: create_release
@@ -40,9 +40,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           ${{ env.TAG_MESSAGE }}
-          
-          **Get the latest image at [ghcr.io/its4u/cert-manager-routes-controller:latest](ghcr.io/its4u/cert-manager-routes-controller:latest)!**
-          
+          <br>
+          **Get the latest image at [ghcr.io/its4u/cert-manager-routes-controller:latest](https://ghcr.io/its4u/cert-manager-routes-controller:latest)!**
+          <br>
           *This release was automatically created by a workflow*
         draft: false
-        prerelease: contains(github.ref_name, "beta")
+        prerelease: ${{ contains(github.ref_name, 'beta') }}
