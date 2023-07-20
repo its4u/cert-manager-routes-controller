@@ -25,7 +25,7 @@ jobs:
     - name: Build the Docker image and push it to ghcr.io
       run: |
         docker build . --file Dockerfile --tag cert-manager-routes-controller:${{  github.ref_name }}
-        docker push ghcr.io/its4u/cert-manager-routes-controller:latest
+        docker push ghcr.io/its4u/cert-manager-routes-controller:${{  github.ref_name }}
     
     - name: Get tag message and assign it to `TAG_MESSAGE`
       run: echo "TAG_MESSAGE=`git tag -l --format='%(contents:subject)' {{  github.ref_name }}`" >> $GITHUB_ENV
