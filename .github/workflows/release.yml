@@ -1,4 +1,4 @@
-  name: Publish a new release
+name: Publish a new release
 
 on:
   push:
