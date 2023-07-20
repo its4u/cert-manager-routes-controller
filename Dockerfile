@@ -3,5 +3,5 @@ LABEL org.opencontainers.image.source="https://github.com/its4u/cert-manager-rou
 
 WORKDIR /app
 COPY ctrl .
-RUN cargo build
+RUN cargo build && chmod -R +rx /app
 CMD cargo run
