@@ -10,5 +10,5 @@ entries:
     type: application
     urls:
     - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-0.9.9-beta.8/cert-manager-routes-controller-0.9.9-beta.8.tgz
-    version: 0.9.9-beta.8
+    version: 0.0.1
 generated: "2023-07-19T08:31:29.064824716+02:00"
