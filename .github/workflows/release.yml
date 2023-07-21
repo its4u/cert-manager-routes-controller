@@ -25,6 +25,10 @@ jobs:
         sed -i "s/version: .*/version: \"${{ github.ref_name }}\"/g" ./charts/Chart.yaml
         sed -i "s/appVersion: .*/version: \"${{ github.ref_name }}\"/g" ./charts/Chart.yaml
         sed -i "0,/version = .*/s//version = \"{{ github.ref_name }}\"/" ./ctrl/Cargo.toml
+        git branch tmp
+        git checkout main
+        git merge tmp
+        git branch -d tmp
         git add -A
         git commit -m "Update version to ${{ github.ref_name }}"
         git push origin main
