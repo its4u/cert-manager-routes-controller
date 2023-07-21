@@ -19,6 +19,11 @@ jobs:
       run: |
         git config user.name "$GITHUB_ACTOR"
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+    - name: Delete tag
+      run: |
+        git tag -d ${{ github.ref_name }}
+        git push origin :refs/tags/${{ github.ref_name }}
     
     - name: Assign version without leading `v`to VERSION env
       run: echo VERSION=`echo "${{ github.ref_name }}" | sed -e 's/^v//'` >> $GITHUB_ENV
