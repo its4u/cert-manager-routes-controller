@@ -1,6 +1,6 @@
 [package]
 name = "cert-manager-routes-controller"
-version = "{{ github.ref_name }}"
+version = "v0.9.9-beta.3"
 edition = "2021"
 
 [dependencies]
