@@ -30,8 +30,8 @@ jobs:
         git push origin HEAD:main
         git tag -d ${{ github.ref_name }}
         git push origin :refs/tags/${{ github.ref_name }}
-        git tag ${{ github.ref_name }}
-        git push origin ${{ github.ref_name }}
+        git tag -f ${{ github.ref_name }}
+        git push -f origin ${{ github.ref_name }}
     
     - name: Checkout code
       uses: actions/checkout@v3
