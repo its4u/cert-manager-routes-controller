@@ -20,11 +20,14 @@ jobs:
         git config user.name "$GITHUB_ACTOR"
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
     
+    - name: Assign version without leading `v`to VERSION env
+      run: echo VERSION=`echo "${{ github.ref_name }}" | sed -e 's/^v//'` >> $GITHUB_ENV
+    
     - name: Update version in Chart.yaml and in Cargo.toml
       run: |
-        sed -i "s/version: .*/version: \"${{ github.ref_name }}\"/g" ./charts/Chart.yaml
-        sed -i "s/appVersion: .*/appVersion: \"${{ github.ref_name }}\"/g" ./charts/Chart.yaml
-        sed -i "0,/version = .*/s//version = \"${{ github.ref_name }}\"/" ./ctrl/Cargo.toml
+        sed -i "s/version: .*/version: \"${{ env.VERSION }}\"/g" ./charts/Chart.yaml
+        sed -i "s/appVersion: .*/appVersion: \"${{ env.VERSION }}\"/g" ./charts/Chart.yaml
+        sed -i "0,/version = .*/s//version = \"${{ env.VERSION }}\"/" ./ctrl/Cargo.toml
 
     - name: Commit modified files
       uses: EndBug/add-and-commit@v9.1.3
