@@ -20,11 +20,6 @@ jobs:
         git config user.name "$GITHUB_ACTOR"
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
     
-    - name: Delete tag
-      run: |
-        git tag -d ${{ github.ref_name }}
-        git push origin :refs/tags/${{ github.ref_name }}
-    
     - name: Assign version without leading `v`to VERSION env
       run: echo VERSION=`echo "${{ github.ref_name }}" | sed -e 's/^v//'` >> $GITHUB_ENV
     
@@ -50,8 +45,8 @@ jobs:
     
     - name: Build the Docker image and push it to ghcr.io
       run: |
-        docker build . --file Dockerfile --tag ghcr.io/its4u/cert-manager-routes-controller:${{  github.ref_name }}
-        docker push ghcr.io/its4u/cert-manager-routes-controller:${{  github.ref_name }}
+        docker build . --file Dockerfile --tag ghcr.io/its4u/cert-manager-routes-controller:${{ env.VERSION }}
+        docker push ghcr.io/its4u/cert-manager-routes-controller:${{ env.VERSION }}
 
     - name: Install Helm
       uses: azure/setup-helm@v3
@@ -62,3 +57,5 @@ jobs:
       uses: helm/chart-releaser-action@v1.5.0
       env:
         CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        CR_SKIP_EXISTING: false
+
