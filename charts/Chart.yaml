@@ -2,5 +2,5 @@ apiVersion: v2
 name: cert-manager-routes-controller
 description: The power of `cert-manger` unleashed for OpenShift routes
 type: application
-version: "0.9.9-beta.5"
-appVersion: "0.9.9-beta.5"
+version: "0.9.9-beta.6"
+appVersion: "0.9.9-beta.6"
