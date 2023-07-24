@@ -2,8 +2,28 @@ apiVersion: v1
 entries:
   cert-manager-routes-controller:
   - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2023-07-24T09:10:01.133139862+02:00"
+    description: The power of `cert-manger` unleashed for OpenShift routes
+    digest: fedda7946dce8c423eb79f8e535b77a780c19d69587704be9dbfb481b59ba558
+    name: cert-manager-routes-controller
+    type: application
+    urls:
+    - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-1.0.0/cert-manager-routes-controller-1.0.0.tgz
+    version: 1.0.0
+  - apiVersion: v2
     appVersion: 0.9.9-beta.15
     created: "2023-07-24T08:52:41.553119617+02:00"
+    description: The power of `cert-manger` unleashed for OpenShift routes
+    digest: fd705db1c095b27c83d99641deccf9fdd5c264074a46447ad7e636bd6b89959a
+    name: cert-manager-routes-controller
+    type: application
+    urls:
+    - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-0.9.9-beta.15/cert-manager-routes-controller-0.9.9-beta.15.tgz
+    version: 0.9.9-beta.15
+  - apiVersion: v2
+    appVersion: 0.9.9-beta.15
+    created: "2023-07-24T09:10:00.840886363+02:00"
     description: The power of `cert-manger` unleashed for OpenShift routes
     digest: fd705db1c095b27c83d99641deccf9fdd5c264074a46447ad7e636bd6b89959a
     name: cert-manager-routes-controller
@@ -31,4 +51,14 @@ entries:
     urls:
     - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-0.9.9-beta.12/cert-manager-routes-controller-0.9.9-beta.12.tgz
     version: 0.9.9-beta.12
-generated: "2023-07-24T08:52:41.553173449+02:00"
+  - apiVersion: v2
+    appVersion: 0.9.9-beta.12
+    created: "2023-07-24T09:10:00.639637696+02:00"
+    description: The power of `cert-manger` unleashed for OpenShift routes
+    digest: 8cad21a17cb110eadee2ee3ab4cf8a45397e2f16d255e095574d8392f0578de6
+    name: cert-manager-routes-controller
+    type: application
+    urls:
+    - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-0.9.9-beta.12/cert-manager-routes-controller-0.9.9-beta.12.tgz
+    version: 0.9.9-beta.12
+generated: "2023-07-24T09:10:01.133209739+02:00"
