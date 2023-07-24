@@ -2,6 +2,23 @@ apiVersion: v1
 entries:
   cert-manager-routes-controller:
   - apiVersion: v2
+    appVersion: 1.0.3
+    created: "2023-07-24T20:50:56.653303981+02:00"
+    description: The power of cert-manager unleashed for OpenShift routes
+    digest: d56e6af1e0c27b1310ddafa27f9e6396848f78b4fc9a7c3eda11ee6b0296d4aa
+    home: https://its4u.github.io/cert-manager-routes-controller/
+    icon: https://raw.githubusercontent.com/its4u/cert-manager-routes-controller/main/img/openshift-cert-manager-logo.png
+    maintainers:
+    - name: Alexandre Perlmutter
+      url: https://github.com/poponealex
+    name: cert-manager-routes-controller
+    sources:
+    - https://github.com/its4u/cert-manager-routes-controller
+    type: application
+    urls:
+    - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-1.0.3/cert-manager-routes-controller-1.0.3.tgz
+    version: 1.0.3
+  - apiVersion: v2
     appVersion: 1.0.2
     created: "2023-07-24T12:14:51.549636286Z"
     description: The power of `cert-manger` unleashed for OpenShift routes
@@ -81,4 +98,4 @@ entries:
     urls:
     - https://github.com/its4u/cert-manager-routes-controller/releases/download/cert-manager-routes-controller-0.9.9-beta.12/cert-manager-routes-controller-0.9.9-beta.12.tgz
     version: 0.9.9-beta.12
-generated: "2023-07-24T12:14:51.54998959Z"
+generated: "2023-07-24T20:50:56.65334873+02:00"
