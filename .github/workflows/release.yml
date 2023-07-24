@@ -57,3 +57,21 @@ jobs:
       run: |
         docker build . --file Dockerfile --tag ghcr.io/its4u/cert-manager-routes-controller:${{ env.VERSION }}
         docker push ghcr.io/its4u/cert-manager-routes-controller:${{ env.VERSION }}
+    
+    - name: Set up Homebrew
+      id: set-up-homebrew
+      uses: Homebrew/actions/setup-homebrew@master
+
+    - name: Install Helm Chart Releaser
+      run: |
+        brew tap helm/tap
+        brew install chart-releaser
+    
+    - name: Package Helm chart
+      run: cr package ./charts
+    
+    - name: Upload chart
+      run: cr upload --owner its4u --git-repo cert-manager-routes-controller --generate-release-notes true --packages-with-index -t ${{ secrets.GITHUB_TOKEN }} --skip-existing --push -c main
+
+    - name: Index chart
+      run: cr index --owner its4u --git-repo cert-manager-routes-controller -t ${{ secrets.GITHUB_TOKEN }}  --push -c main
