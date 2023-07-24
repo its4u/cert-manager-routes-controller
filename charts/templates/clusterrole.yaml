@@ -18,6 +18,14 @@ rules:
     resources:
       - routes
   - verbs:
+      - 'create'
+      - 'patch'
+      - 'update'
+    apiGroups:
+      - route.openshift.io
+    resources:
+      - routes/custom-host
+  - verbs:
       - 'get'
       - 'list'
       - 'watch'
@@ -28,3 +36,9 @@ rules:
       - cert-manager.io
     resources:
       - certificates
+  - verbs:
+      - 'get'
+    apiGroups:
+      - ''
+    resources:
+      - secrets

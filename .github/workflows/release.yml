@@ -2,26 +2,30 @@ name: Publish a new release
 
 on:
   push:
-    tags:
-      - "v*"
-      
+    branches:
+      - "main"
+    paths:
+      - "VERSION"
+
 jobs:
 
-  realease:
+  release:
 
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0 
+    
+    - name: Get version
+      run: echo "VERSION=`cat VERSION`" >> $GITHUB_ENV
 
     - name: Configure Git
       run: |
         git config user.name "$GITHUB_ACTOR"
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-    
-    - name: Assign version without leading `v`to VERSION env
-      run: echo VERSION=`echo "${{ github.ref_name }}" | sed -e 's/^v//'` >> $GITHUB_ENV
     
     - name: Update version in Chart.yaml and in Cargo.toml
       run: |
@@ -33,9 +37,14 @@ jobs:
       uses: EndBug/add-and-commit@v9.1.3
       with:
         add: '-f charts/Chart.yaml ctrl/Cargo.toml'
-        message: 'Update version to ${{ github.ref_name }}'
-        push: "origin HEAD:main"     
-        
+        message: 'Update version to ${{ env.VERSION }}'
+        push: "origin HEAD:main"
+
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0 
+
     - name: 'Login to GitHub Container Registry'
       uses: docker/login-action@v1
       with:
@@ -47,15 +56,24 @@ jobs:
       run: |
         docker build . --file Dockerfile --tag ghcr.io/its4u/cert-manager-routes-controller:${{ env.VERSION }}
         docker push ghcr.io/its4u/cert-manager-routes-controller:${{ env.VERSION }}
+    
+    - name: Set up Homebrew
+      id: set-up-homebrew
+      uses: Homebrew/actions/setup-homebrew@master
 
-    - name: Install Helm
-      uses: azure/setup-helm@v3
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-    - name: Run chart-releaser
-      uses: helm/chart-releaser-action@v1.5.0
-      env:
-        CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-        CR_SKIP_EXISTING: true
+    - name: Install Helm Chart Releaser
+      run: |
+        brew tap helm/tap
+        brew install chart-releaser
+    
+    - name: Package Helm chart
+      run: cr package ./charts
+    
+    - name: Upload chart
+      run: cr upload --owner its4u --git-repo cert-manager-routes-controller --generate-release-notes true --packages-with-index -t ${{ secrets.GITHUB_TOKEN }} --skip-existing --push -c main
 
+    - name: Create `.cr-index` dir
+      run: mkdir .cr-index
+    
+    - name: Index chart
+      run: cr index --owner its4u --git-repo cert-manager-routes-controller -t ${{ secrets.GITHUB_TOKEN }}  --push -c main
