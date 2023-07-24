@@ -73,5 +73,8 @@ jobs:
     - name: Upload chart
       run: cr upload --owner its4u --git-repo cert-manager-routes-controller --generate-release-notes true --packages-with-index -t ${{ secrets.GITHUB_TOKEN }} --skip-existing --push -c main
 
+    - name: Create `.cr-index` dir
+      run: mkdir .cr-index
+    
     - name: Index chart
       run: cr index --owner its4u --git-repo cert-manager-routes-controller -t ${{ secrets.GITHUB_TOKEN }}  --push -c main
