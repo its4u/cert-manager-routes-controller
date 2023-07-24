@@ -22,7 +22,7 @@ An OpenShift Container Platform cluster with [`cert-manager`](https://cert-manag
 
 - In a custom `<CUSTOM_NS_NAME>` namespace:
 
-`helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller --set CERT_MANAGER_NAMESPACE=<CUSTOM_NS_NAME>`
+`helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller --set cert_manager_namespace=<CUSTOM_NS_NAME>`
 
 ## How to use
 
