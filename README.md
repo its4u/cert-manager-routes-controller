@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/its4u/cert-manager-routes-controller/main/img/openshift-cert-manager-logo.png" alt="cert-manager OpenShift controller" height=150 width=150 align="left" />
+<img src="https://raw.githubusercontent.com/its4u/cert-manager-routes-controller/main/img/openshift-cert-manager-logo.png" alt="cert-manager OpenShift controller" height=200 width=200 align="left" />
 
 ## An anti-anxiety pill against certificates renewal nightmares in OpenShift
 
