@@ -1,6 +1,11 @@
-# cert-manager OpenShift Routes controller
+<img src="https://raw.githubusercontent.com/its4u/cert-manager-routes-controller/main/img/openshift-cert-manager-logo.png" alt="cert-manager OpenShift controller" height=150 width=150 align="left" />
 
-The power of `cert-manager` unleashed for OpenShift routes 🚀
+## An anti-anxiety pill against certificates renewal nightmares in OpenShift
+
+No more sleep disorders... No more spending nights wondering whether a certificate has expired in your cluster...<br>
+**The automation power of `cert-manager` is now unleashed for OpenShift routes** 🚀
+
+----
 
 ## Requirements
 
@@ -54,4 +59,4 @@ annotations:
 
 > On the first certificate issuance, it might take a few minutes for the certificate to be ready. Hence, you might have to wait a little before you see your route being populated 😉
 
-4. That's it! `cert-manager` will take care of the certificate renewal process. Our controller will ensure that your route's TLS is always populated with the correct up-to-date certificate.
+4. That's it!<br>`cert-manager` will take care of the certificate renewal process.<br>Our controller will ensure that your route's TLS is always populated with the correct up-to-date certificate.
