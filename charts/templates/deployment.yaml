@@ -6,9 +6,6 @@ metadata:
   labels:
     {{- include "chart.labels" . | nindent 4 }}
 spec:
-  selector:
-    matchLabels:
-      {{- include "chart.labels" . | nindent 6 }}
   template:
     metadata:
       labels:
