@@ -12,17 +12,23 @@ An OpenShift Container Platform cluster with [`cert-manager`](https://cert-manag
 
 1. Add the chart repository
 
-`helm repo add its4u-cm https://its4u.github.io/cert-manager-routes-controller`
+```
+helm repo add its4u-cm https://its4u.github.io/cert-manager-routes-controller
+```
 
 2. Install the controller
 
 - In the default `cert-manager` namespace:
 
-`helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller`
+```
+helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller
+```
 
 - In a custom `<CUSTOM_NS_NAME>` namespace:
 
-`helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller --set cert_manager_namespace=<CUSTOM_NS_NAME>`
+```
+helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller --set cert_manager_namespace=<CUSTOM_NS_NAME>
+```
 
 ## How to use
 
