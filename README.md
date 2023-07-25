@@ -17,24 +17,25 @@ An OpenShift Container Platform cluster with [`cert-manager`](https://cert-manag
 
 ## Installation (Helm)
 
-1. Add the chart repository
-
+1. Make sure that the chart repository is installed and up-to-date
 ```
 helm repo add its4u-cm https://its4u.github.io/cert-manager-routes-controller
+helm repo update
 ```
 
-2. Install the controller
+2. Install `cert-manager-routes-controller`
 
 - In the default `cert-manager` namespace:
 
 ```
-helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller
+helm upgrade --install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller
 ```
 
 - In a custom `<CUSTOM_NS_NAME>` namespace:
 
 ```
-helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller --set cert_manager_namespace=<CUSTOM_NS_NAME>
+helm upgrade --install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller \
+    --set cert_manager_namespace=<CUSTOM_NS_NAME>
 ```
 
 ----
@@ -56,7 +57,7 @@ spec:
 
 ```yaml
 annotations:
-    cert-manager.io/issuer: <CLUSTER_ISSUER_NAME>
+    cert-manager.io/cluster-issuer: <CLUSTER_ISSUER_NAME>
 ```
 
 3. Sit tight and watch your route's TLS being automatically populated!
@@ -67,26 +68,14 @@ annotations:
 
 ----
 
-## How does it work?
+## Where are the `Certificate`s stored?
 
-> WIP: Add a graph
-
-### Where are the `Certificate`s stored?
-
-All of the `Certificate` and their `Secret`s are stored in the same `CERT_MANAGER_NAMESPACE`. This allows us to reuse a `Certificate` cluster-wide and avoid reordering a `Certificate` that already exists on the cluster. 
+All of the `Certificate`s and their respective `Secret` are stored in the same `CERT_MANAGER_NAMESPACE`. This allows us to reuse a `Certificate` cluster-wide and avoid reordering a `Certificate` that already exists in the cluster. 
 
 > For instance, we have a route `https://example.com/hello` in the `hello` NS and a route `https://example.com/world` in the `world` NS. Both of these routes use the same domain, hence only one certificate is required. Therefore, we won't be ordering two certificates. We'll merely use the same one for both routes even though they're in a different namespace.
 
-### How does the controller handle a reconcile request?
+---
 
-The controller gets a reconcile request from a `Route` because it noticed a changed on a it or because its related `Certificate` was modified.
+## Take a peek at our Wiki for more information
 
-- If the route is being finalized:
-  - The controller will update the `Route`'s related certificate
-  - The controller will terminate the `Route` by removing its finalizer
-- Else if the route is annotated with the `cert-manager.io/issuer` annotation
-  - The controller will create a `Certificate` in the `CERT_MANAGER_NAMESPACE` if it doesn't exist yet
-  - The controller will ensure that the `Route` is correctly populated with the latest up-to-date certificate
-  - The controller will ensure that the `Route` has a finalizer to properly handle its deletion
-- The controller will ensure that each `Certificate` is correctly annotated to point to each of the `Route`s that uses it
-- Each request is reqeued to an hour forward to ensure that no watch event is missed
+[The cert-manager-routes-controller wiki](https://github.com/its4u/cert-manager-routes-controller/wiki)
