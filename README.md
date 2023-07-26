@@ -60,3 +60,27 @@ annotations:
 > On the first certificate issuance, it might take a few minutes for the certificate to be ready. Hence, you might have to wait a little before you see your route being populated 😉
 
 4. That's it!<br>`cert-manager` will take care of the certificate renewal process.<br>Our controller will ensure that your route's TLS is always populated with the correct up-to-date certificate.
+
+## How does it work?
+
+> WIP: Add a graph
+
+### Where are the `Certificate`s stored?
+
+All of the `Certificate` and their `Secret`s are stored in the same `CERT_MANAGER_NAMESPACE`. This allows us to reuse a `Certificate` cluster-wide and avoid reordering a `Certificate` that already exists on the cluster. 
+
+> For instance, we have a route `https://example.com/hello` in the `hello` NS and a route `https://example.com/world` in the `world` NS. Both of these routes use the same domain, hence only one certificate is required. Therefore, we won't be ordering two certificates. We'll merely use the same one for both routes even though they're in a different namespace.
+
+### How does the controller handle a reconcile request?
+
+The controller gets a reconcile request from a `Route` because it noticed a changed on a it or because its related `Certificate` was modified.
+
+- If the route is being finalized:
+  - The controller will update the `Route`'s related certificate
+  - The controller will terminate the `Route` by removing its finalizer
+- Else if the route is annotated with the `cert-manager.io/issuer` annotation
+  - The controller will create a `Certificate` in the `CERT_MANAGER_NAMESPACE` if it doesn't exist yet
+  - The controller will ensure that the `Route` is correctly populated with the latest up-to-date certificate
+  - The controller will ensure that the `Route` has a finalizer to properly handle its deletion
+- The controller will ensure that each `Certificate` is correctly annotated to point to each of the `Route`s that uses it
+- Each request is reqeued to an hour forward to ensure that no watch event is missed
