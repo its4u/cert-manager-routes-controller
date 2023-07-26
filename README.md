@@ -13,6 +13,8 @@ An OpenShift Container Platform cluster with [`cert-manager`](https://cert-manag
 
 > We recommend that you use the [`cert-manager Operator for RedHat Openshift`](https://docs.openshift.com/container-platform/4.12/security/cert_manager_operator/index.html)
 
+----
+
 ## Installation (Helm)
 
 1. Add the chart repository
@@ -34,6 +36,8 @@ helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-control
 ```
 helm install cert-manager-routes-controller its4u-cm/cert-manager-routes-controller --set cert_manager_namespace=<CUSTOM_NS_NAME>
 ```
+
+----
 
 ## How to use
 
@@ -60,6 +64,8 @@ annotations:
 > On the first certificate issuance, it might take a few minutes for the certificate to be ready. Hence, you might have to wait a little before you see your route being populated 😉
 
 4. That's it!<br>`cert-manager` will take care of the certificate renewal process.<br>Our controller will ensure that your route's TLS is always populated with the correct up-to-date certificate.
+
+----
 
 ## How does it work?
 
