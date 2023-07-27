@@ -1,7 +1,7 @@
 use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
 use crate::tools::{format_route_update_annotation, get_secret_tls_data, resource_to_string};
 use crate::types::ContextData;
-use crate::{FINALIZER, ISSUER_ANNOTATION_KEY};
+use crate::{FINALIZER, CLUSTER_ISSUER_ANNOTATION_KEY};
 use kube::api::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},
@@ -117,7 +117,7 @@ pub fn is_valid_route(route: &Route) -> bool {
             .annotations
             .as_ref()
             .unwrap()
-            .get(ISSUER_ANNOTATION_KEY)
+            .get(CLUSTER_ISSUER_ANNOTATION_KEY)
             == None
     {
         false
@@ -150,7 +150,7 @@ fn test_is_valid_route() {
         &"test".to_owned(),
         &"test".to_owned(),
         Some(&"test".to_owned()),
-        Some(&ISSUER_ANNOTATION_KEY.to_owned()),
+        Some(&CLUSTER_ISSUER_ANNOTATION_KEY.to_owned()),
     );
     assert_eq!(is_valid_route(&route), true);
 }
