@@ -20,7 +20,7 @@ spec:
             requests:
               cpu: {{ .Values.requests.cpu }}
               memory: {{ .Values.requests.memory }}
-        - name: {{ include "chart.fullname" . }}
+          name: {{ include "chart.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
