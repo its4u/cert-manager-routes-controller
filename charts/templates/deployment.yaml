@@ -22,3 +22,7 @@ spec:
           env:
             - name: CERT_MANAGER_NAMESPACE
               value: {{ .Values.cert_manager_namespace }}
+            - name: CONTROLLER_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name

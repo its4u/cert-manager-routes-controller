@@ -11,8 +11,4 @@ autoscaling:
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80
 
-service:
-  type: ClusterIP
-  port: 3000
-
 cert_manager_namespace: "cert-manager"

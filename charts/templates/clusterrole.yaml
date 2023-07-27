@@ -42,3 +42,10 @@ rules:
       - ''
     resources:
       - secrets
+  - apiGroups: 
+      - "events.k8s.io"
+    resources: 
+      - "events"
+    verbs: 
+      - "create"
+
