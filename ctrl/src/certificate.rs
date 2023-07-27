@@ -6,7 +6,7 @@ use crate::tools::{
     format_cert_annotation, format_cert_name, format_secret_name, resource_to_string,
 };
 use crate::types::ContextData;
-use crate::{CERT_ANNOTATION_KEY, ISSUER_ANNOTATION_KEY};
+use crate::{CERT_ANNOTATION_KEY, CLUSTER_ISSUER_ANNOTATION_KEY};
 use kube::{
     api::{ObjectMeta, Patch, PatchParams, PostParams},
     Api,
@@ -170,7 +170,7 @@ pub async fn create_certificate(
     let cert = Certificate::new_default(
         &cert_name,
         &hostname,
-        &annotations.get(ISSUER_ANNOTATION_KEY).unwrap().to_owned(),
+        &annotations.get(CLUSTER_ISSUER_ANNOTATION_KEY).unwrap().to_owned(),
         &ctx,
     );
     Ok(cert_api.create(&PostParams::default(), &cert).await?)

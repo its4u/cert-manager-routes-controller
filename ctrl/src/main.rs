@@ -26,7 +26,7 @@ const REQUEUE_ERROR_DURATION_FAST: u64 = 5;
 pub const DEFAULT_CERT_MANAGER_NAMESPACE: &'static str = "cert-manager";
 pub const CERT_MANAGER_NAMESPACE_ENV: &'static str = "CERT_MANAGER_NAMESPACE";
 pub const CERT_ANNOTATION_KEY: &'static str = "cert-manager.io/routes";
-pub const ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/issuer";
+pub const CLUSTER_ISSUER_ANNOTATION_KEY: &'static str = "cert-manager.io/cluster-issuer";
 pub const FINALIZER: &'static str = "kubernetes";
 
 /// The main function initializes the controller and runs it in a multi-threaded context.
@@ -97,7 +97,7 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
         }
     }
 
-    if (remove_annotation || route.annotations().get(ISSUER_ANNOTATION_KEY).is_none())
+    if (remove_annotation || route.annotations().get(CLUSTER_ISSUER_ANNOTATION_KEY).is_none())
         && route.spec.host.as_ref().is_some()
     {
         let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
