@@ -56,7 +56,7 @@ spec:
 
 ```yaml
 annotations:
-    cert-manager.io/issuer: <CLUSTER_ISSUER_NAME>
+    cert-manager.io/cluster-issuer: <CLUSTER_ISSUER_NAME>
 ```
 
 3. Sit tight and watch your route's TLS being automatically populated!
@@ -89,4 +89,4 @@ The controller gets a reconcile request from a `Route` because it noticed a chan
   - The controller will ensure that the `Route` is correctly populated with the latest up-to-date certificate
   - The controller will ensure that the `Route` has a finalizer to properly handle its deletion
 - The controller will ensure that each `Certificate` is correctly annotated to point to each of the `Route`s that uses it
-- Each request is reqeued to an hour forward to ensure that no watch event is missed
+- Each request is requeued to an hour forward to ensure that no watch event is missed
