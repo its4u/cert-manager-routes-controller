@@ -10,5 +10,10 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+requests:
+  cpu: 100m
+  memory: 150Mi
 
 cert_manager_namespace: "cert-manager"
