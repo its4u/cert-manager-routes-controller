@@ -73,7 +73,7 @@ annotations:
 
 ### Where are the `Certificate`s stored?
 
-All of the `Certificate` and their `Secret`s are stored in the same `CERT_MANAGER_NAMESPACE`. This allows us to reuse a `Certificate` cluster-wide and avoid reordering a `Certificate` that already exists on the cluster. 
+All of the `Certificate`s and their respective `Secret` are stored in the same `CERT_MANAGER_NAMESPACE`. This allows us to reuse a `Certificate` cluster-wide and avoid reordering a `Certificate` that already exists in the cluster. 
 
 > For instance, we have a route `https://example.com/hello` in the `hello` NS and a route `https://example.com/world` in the `world` NS. Both of these routes use the same domain, hence only one certificate is required. Therefore, we won't be ordering two certificates. We'll merely use the same one for both routes even though they're in a different namespace.
 
