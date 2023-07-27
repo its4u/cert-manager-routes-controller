@@ -1,7 +1,7 @@
 use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
 use crate::tools::{format_route_update_annotation, get_secret_tls_data, resource_to_string};
 use crate::types::ContextData;
-use crate::{FINALIZER, CLUSTER_ISSUER_ANNOTATION_KEY};
+use crate::{CLUSTER_ISSUER_ANNOTATION_KEY, FINALIZER};
 use kube::api::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},

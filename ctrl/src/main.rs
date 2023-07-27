@@ -1,30 +1,30 @@
 pub mod certificate;
 pub mod crd;
+pub mod events;
 pub mod route;
 pub mod tools;
 pub mod types;
-pub mod events;
 
 use certificate::{annotate_cert, certificate_exists, create_certificate, is_cert_annotated};
 use crd::{certificate::Certificate, route::Route};
+use events::{error_event, success_event};
 use futures::StreamExt;
+use k8s_openapi::api::core::v1::ObjectReference;
 use kube::{
     api::ListParams,
     runtime::{
         controller::{Action, Controller},
+        events::{Recorder, Reporter},
         reflector::ObjectRef,
-        events::{Reporter, Recorder},
     },
     Api, Client, ResourceExt,
 };
-use k8s_openapi::api::core::v1::ObjectReference;
 use route::{
     add_finalizer, is_tls_up_to_date, is_valid_route, populate_route_tls, remove_finalizer,
 };
 use std::{sync::Arc, time::Duration};
 use tools::format_cert_name;
 use types::*;
-use events::{success_event, error_event};
 
 const REQUEUE_DEFAULT_INTERVAL: u64 = 3600;
 const REQUEUE_ERROR_DURATION_SLOW: u64 = 120;
@@ -56,12 +56,8 @@ async fn main() -> Result<(), kube::Error> {
         instance: std::env::var(CONTROLLER_POD_ENV).ok(),
     };
     let recorder = Recorder::new(client.clone(), reporter, reference);
-    
-    let context = Arc::new(ContextData::new(
-        client,
-        cert_manager_namespace,
-        recorder,
-    ));
+
+    let context = Arc::new(ContextData::new(client, cert_manager_namespace, recorder));
 
     Controller::new(
         Api::<Route>::all(context.client.clone()),
@@ -108,19 +104,26 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
         remove_annotation = true;
 
         match remove_finalizer(&route, &ctx).await {
-            Ok(_) => success_event(
-                "Patch".to_owned(), 
-                "RouteDeletion".to_owned(), 
-                Some(format!("Removed finalizer from Route `{}`", &route)),
-                &ctx.recorder.clone()
-            ).await,
+            Ok(_) => {
+                success_event(
+                    "Patch".to_owned(),
+                    "RouteDeletion".to_owned(),
+                    Some(format!("Removed finalizer from Route `{}`", &route)),
+                    &ctx.recorder.clone(),
+                )
+                .await
+            }
             Err(e) => {
                 error_event(
-                    "Patch".to_owned(), 
-                    "RouteDeletion".to_owned(), 
-                    Some(format!("Error removing finalizer from Route `{}`: {}", &route, e)),
-                    &ctx.recorder.clone()
-                ).await;
+                    "Patch".to_owned(),
+                    "RouteDeletion".to_owned(),
+                    Some(format!(
+                        "Error removing finalizer from Route `{}`: {}",
+                        &route, e
+                    )),
+                    &ctx.recorder.clone(),
+                )
+                .await;
                 return Ok(Action::requeue(Duration::from_secs(
                     REQUEUE_ERROR_DURATION_SLOW,
                 )));
@@ -128,7 +131,11 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
         }
     }
 
-    if (remove_annotation || route.annotations().get(CLUSTER_ISSUER_ANNOTATION_KEY).is_none())
+    if (remove_annotation
+        || route
+            .annotations()
+            .get(CLUSTER_ISSUER_ANNOTATION_KEY)
+            .is_none())
         && route.spec.host.as_ref().is_some()
     {
         let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
@@ -138,19 +145,29 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
                 .unwrap_or(true)
         {
             match annotate_cert(&cert_name, &route, &ctx, false).await {
-                Ok(certificate) => success_event(
-                    "Patch".to_owned(), 
-                    "UnmanageRoute".to_owned(), 
-                    Some(format!("Removed  Route `{}` from Certificate `{}` annotation", &route, &certificate)),
-                    &ctx.recorder.clone()
-                ).await,
+                Ok(certificate) => {
+                    success_event(
+                        "Patch".to_owned(),
+                        "UnmanageRoute".to_owned(),
+                        Some(format!(
+                            "Removed  Route `{}` from Certificate `{}` annotation",
+                            &route, &certificate
+                        )),
+                        &ctx.recorder.clone(),
+                    )
+                    .await
+                }
                 Err(e) => {
                     error_event(
-                        "Patch".to_owned(), 
-                        "UnmanageRoute".to_owned(), 
-                        Some(format!("Error removing Route `{}` from Certificate `{}/{}` annotation: {}", &ctx.cert_manager_namespace, &cert_name, &route, e)),
-                        &ctx.recorder.clone()
-                    ).await;
+                        "Patch".to_owned(),
+                        "UnmanageRoute".to_owned(),
+                        Some(format!(
+                            "Error removing Route `{}` from Certificate `{}/{}` annotation: {}",
+                            &ctx.cert_manager_namespace, &cert_name, &route, e
+                        )),
+                        &ctx.recorder.clone(),
+                    )
+                    .await;
                     return Ok(Action::requeue(Duration::from_secs(
                         REQUEUE_ERROR_DURATION_SLOW,
                     )));
@@ -163,19 +180,29 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
 
         if !certificate_exists(&cert_name, &ctx).await {
             match create_certificate(&route, &ctx).await {
-                Ok(certificate) => success_event(
-                    "Create".to_owned(), 
-                    "MissingCertificate".to_owned(), 
-                    Some(format!("Created Certificate `{}` requested by Route `{}`", &certificate, &route)),
-                    &ctx.recorder.clone()
-                ).await,
+                Ok(certificate) => {
+                    success_event(
+                        "Create".to_owned(),
+                        "MissingCertificate".to_owned(),
+                        Some(format!(
+                            "Created Certificate `{}` requested by Route `{}`",
+                            &certificate, &route
+                        )),
+                        &ctx.recorder.clone(),
+                    )
+                    .await
+                }
                 Err(e) => {
                     error_event(
-                        "Patch".to_owned(), 
-                        "MissingCertificate".to_owned(), 
-                        Some(format!("Error creating Certificate `{}/{}` requested by Route `{}`: {}", &ctx.cert_manager_namespace, &cert_name, &route, e)),
-                        &ctx.recorder.clone()
-                    ).await;
+                        "Patch".to_owned(),
+                        "MissingCertificate".to_owned(),
+                        Some(format!(
+                            "Error creating Certificate `{}/{}` requested by Route `{}`: {}",
+                            &ctx.cert_manager_namespace, &cert_name, &route, e
+                        )),
+                        &ctx.recorder.clone(),
+                    )
+                    .await;
                     return Ok(Action::requeue(Duration::from_secs(
                         REQUEUE_ERROR_DURATION_SLOW,
                     )));
@@ -185,19 +212,26 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
 
         match is_tls_up_to_date(&route, &cert_name, &ctx).await {
             Ok(false) | Err(_) => match populate_route_tls(&route, &cert_name, &ctx).await {
-                Ok(_) => success_event(
-                    "Patch".to_owned(), 
-                    "InvalidRouteTLS".to_owned(), 
-                    Some(format!("Populated TLS for Route `{}`", &route)),
-                    &ctx.recorder.clone()
-                ).await,
+                Ok(_) => {
+                    success_event(
+                        "Patch".to_owned(),
+                        "InvalidRouteTLS".to_owned(),
+                        Some(format!("Populated TLS for Route `{}`", &route)),
+                        &ctx.recorder.clone(),
+                    )
+                    .await
+                }
                 Err(e) => {
                     error_event(
-                        "Patch".to_owned(), 
-                        "InvalidRouteTLS".to_owned(), 
-                        Some(format!("Error populating TLS for Route `{}`: {}", &route, e)),
-                        &ctx.recorder.clone()
-                    ).await;
+                        "Patch".to_owned(),
+                        "InvalidRouteTLS".to_owned(),
+                        Some(format!(
+                            "Error populating TLS for Route `{}`: {}",
+                            &route, e
+                        )),
+                        &ctx.recorder.clone(),
+                    )
+                    .await;
                     return Ok(Action::requeue(Duration::from_secs(
                         REQUEUE_ERROR_DURATION_SLOW,
                     )));
@@ -208,19 +242,26 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
 
         if !route.finalizers().contains(&FINALIZER.to_string()) {
             match add_finalizer(&route, &ctx).await {
-                Ok(_) => success_event(
-                    "Patch".to_owned(), 
-                    "MissingRouteFinalizer".to_owned(), 
-                    Some(format!("Added finalizer to Route `{}`", &route)),
-                    &ctx.recorder.clone()
-                ).await,
+                Ok(_) => {
+                    success_event(
+                        "Patch".to_owned(),
+                        "MissingRouteFinalizer".to_owned(),
+                        Some(format!("Added finalizer to Route `{}`", &route)),
+                        &ctx.recorder.clone(),
+                    )
+                    .await
+                }
                 Err(e) => {
                     error_event(
-                        "Patch".to_owned(), 
-                        "MissingRouteFinalizer".to_owned(), 
-                        Some(format!("Error adding finalizer to Route `{}`: {}", &route, e)),
-                        &ctx.recorder.clone()
-                    ).await;
+                        "Patch".to_owned(),
+                        "MissingRouteFinalizer".to_owned(),
+                        Some(format!(
+                            "Error adding finalizer to Route `{}`: {}",
+                            &route, e
+                        )),
+                        &ctx.recorder.clone(),
+                    )
+                    .await;
                     return Ok(Action::requeue(Duration::from_secs(
                         REQUEUE_ERROR_DURATION_SLOW,
                     )));
@@ -238,25 +279,33 @@ async fn reconcile(route: Arc<Route>, ctx: Arc<ContextData>) -> Result<Action, E
         if is_valid_route(&route) {
             let cert_name = format_cert_name(&route.spec.host.as_ref().unwrap());
             match is_cert_annotated(&cert_name, &route, &ctx).await {
-                Ok(false) | Err(_) => match annotate_cert(&cert_name, &route, &ctx, true).await {
-                    Ok(certificate) => success_event(
-                        "Patch".to_owned(), 
-                        "MissingRouteInCertificateAnnotation".to_owned(), 
-                        Some(format!("Annotated Certificate `{}` for Route `{}`", &certificate, &route)),
-                        &ctx.recorder.clone()
-                    ).await,
-                    Err(e) => {
-                        error_event(
+                Ok(false) | Err(_) => {
+                    match annotate_cert(&cert_name, &route, &ctx, true).await {
+                        Ok(certificate) => {
+                            success_event(
+                                "Patch".to_owned(),
+                                "MissingRouteInCertificateAnnotation".to_owned(),
+                                Some(format!(
+                                    "Annotated Certificate `{}` for Route `{}`",
+                                    &certificate, &route
+                                )),
+                                &ctx.recorder.clone(),
+                            )
+                            .await
+                        }
+                        Err(e) => {
+                            error_event(
                             "Patch".to_owned(), 
                             "MissingRouteInCertificateAnnotation".to_owned(), 
                             Some(format!("Error annotating Certificate `{}/{}` requested by Route `{}`: {}", &ctx.cert_manager_namespace, &cert_name, &route, e)),
                             &ctx.recorder.clone()
                         ).await;
-                        return Ok(Action::requeue(Duration::from_secs(
-                            REQUEUE_ERROR_DURATION_SLOW,
-                        )));
+                            return Ok(Action::requeue(Duration::from_secs(
+                                REQUEUE_ERROR_DURATION_SLOW,
+                            )));
+                        }
                     }
-                },
+                }
                 _ => {}
             }
         }

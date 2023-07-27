@@ -1,4 +1,4 @@
-use kube::{Client, runtime::events::Recorder};
+use kube::{runtime::events::Recorder, Client};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {}

@@ -170,7 +170,10 @@ pub async fn create_certificate(
     let cert = Certificate::new_default(
         &cert_name,
         &hostname,
-        &annotations.get(CLUSTER_ISSUER_ANNOTATION_KEY).unwrap().to_owned(),
+        &annotations
+            .get(CLUSTER_ISSUER_ANNOTATION_KEY)
+            .unwrap()
+            .to_owned(),
         &ctx,
     );
     Ok(cert_api.create(&PostParams::default(), &cert).await?)
