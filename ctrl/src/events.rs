@@ -1,7 +1,4 @@
-use kube::{
-    runtime::events::{Event, EventType, Recorder},
-    Error,
-};
+use kube::runtime::events::{Event, EventType, Recorder};
 
 /// Publish a successful event
 ///
