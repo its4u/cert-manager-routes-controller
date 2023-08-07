@@ -24,7 +24,6 @@ pub async fn success_event(
             secondary: None,
         })
         .await;
-    println!("{:?}", res);
     ()
 }
 
