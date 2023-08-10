@@ -1,8 +1,9 @@
-use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind};
+use crate::crd::route::{Route, RouteSpec, RouteTo, RouteToKind, RouteTlsTermination, RouteTlsInsecureEdgeTerminationPolicy};
 use crate::tools::{format_route_update_annotation, get_secret_tls_data, resource_to_string};
 use crate::types::ContextData;
 use crate::{CLUSTER_ISSUER_ANNOTATION_KEY, FINALIZER};
 use kube::api::ObjectMeta;
+use kube::core::object::HasSpec;
 use kube::{
     api::{Patch, PatchParams},
     Api, ResourceExt,
@@ -11,8 +12,8 @@ use serde_json;
 use std::collections::BTreeMap;
 use std::fmt;
 
-const TERMINATION: &'static str = "edge";
-const REDIRECT_POLICY: &'static str = "Redirect";
+const DEFAULT_TERMINATION: RouteTlsTermination = RouteTlsTermination::Edge;
+const DEFAULT_INSECURE_EDGE_TERMINATION_POLICY: RouteTlsInsecureEdgeTerminationPolicy = RouteTlsInsecureEdgeTerminationPolicy::Redirect;
 pub const TLS_CRT: &'static str = "tls.crt";
 pub const TLS_KEY: &'static str = "tls.key";
 const CA_CRT: &'static str = "ca.crt";
@@ -188,6 +189,13 @@ pub async fn populate_route_tls(
         Some(std::str::from_utf8(&data.get(TLS_CRT).unwrap().0).unwrap())
     };
     let routes = Api::<Route>::namespaced(ctx.client.clone(), &route.namespace().unwrap());
+    let (termination, insecure_edge_termination_policy) = match route.spec().tls.is_some() {
+        true => (
+            &route.spec().tls.as_ref().unwrap().termination,
+            &route.spec().tls.as_ref().unwrap().insecure_edge_termination_policy
+        ),
+        false => (&DEFAULT_TERMINATION, &Some(DEFAULT_INSECURE_EDGE_TERMINATION_POLICY))
+    };
     let patch = serde_json::json!({
         "metadata":{
             "annotations": {
@@ -196,8 +204,8 @@ pub async fn populate_route_tls(
         },
         "spec": {
             "tls": {
-                "termination": TERMINATION,
-                "insecureEdgeTerminationPolicy": REDIRECT_POLICY,
+                "termination": termination,
+                "insecureEdgeTerminationPolicy": insecure_edge_termination_policy,
                 "key": key,
                 "certificate": cert,
                 "caCertificate": ca.unwrap_or_default()
