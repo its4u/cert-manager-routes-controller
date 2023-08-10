@@ -15,7 +15,7 @@ pub async fn success_event(
     recorder: &Recorder,
 ) -> () {
     println!("OK; action={}; reason={}; note={:?};", action, reason, note);
-    let res = recorder
+    let _ = recorder
         .publish(Event {
             action,
             reason,
